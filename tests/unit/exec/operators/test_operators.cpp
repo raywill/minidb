@@ -3,7 +3,7 @@
 #include "exec/operators/projection_operator.h"
 #include "exec/operators/final_result_operator.h"
 #include "storage/table.h"
-#include "sql/ast/ast_node.h"
+#include "sql/compiler/statement.h"
 #include "mem/arena.h"
 #include "log/logger.h"
 #include <iostream>
@@ -489,7 +489,7 @@ void test_expression_evaluator() {
     chunk.add_column(age_col);
     
     // 创建比较表达式：age > 19
-    auto left_expr = std::unique_ptr<Expression>(new ColumnRefExpression("age"));
+    auto left_expr = std::unique_ptr<Expression>(new ColumnRefExpression("", "age", 1));
     auto right_expr = std::unique_ptr<Expression>(new LiteralExpression(DataType::INT, "19"));
     auto comparison_expr = std::unique_ptr<Expression>(
         new BinaryExpression(BinaryOperatorType::GREATER_THAN, std::move(left_expr), std::move(right_expr)));

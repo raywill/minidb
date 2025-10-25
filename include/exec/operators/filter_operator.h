@@ -1,7 +1,7 @@
 #pragma once
 
 #include "exec/operator.h"
-#include "sql/ast/ast_node.h"
+#include "sql/compiler/statement.h"
 #include <memory>
 
 namespace minidb {

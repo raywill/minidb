@@ -34,10 +34,14 @@ LogRecord::LogRecord(LogLevel l, const std::string& m, const std::string& c, con
     auto time_t = std::chrono::system_clock::to_time_t(now);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         now.time_since_epoch()) % 1000;
-    
+
+    // 使用strftime代替put_time (GCC 4.8兼容)
+    char buffer[64];
+    struct tm* timeinfo = std::localtime(&time_t);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+
     std::ostringstream oss;
-    oss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+    oss << buffer << '.' << std::setfill('0') << std::setw(3) << ms.count();
     timestamp = oss.str();
     
     // 获取线程ID

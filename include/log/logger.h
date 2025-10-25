@@ -6,6 +6,7 @@
 #include <mutex>
 #include <thread>
 #include <sstream>
+#include <vector>
 
 namespace minidb {
 

@@ -3,30 +3,57 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -O2 -g
 INCLUDES = -Iinclude -Isrc
 
-# Source directories  
-SRC_DIRS = src/common src/mem src/log src/sql/parser src/sql/ast src/storage src/exec src/exec/operators src/exec/executor src/net src/server src/client
+# Source directories
+SRC_DIRS = src/common src/mem src/log src/sql/parser src/sql/ast src/sql/compiler src/sql/optimizer src/storage src/exec src/exec/operators src/exec/executor src/exec/plan src/net src/server src/client
 SOURCES = $(foreach dir,$(SRC_DIRS),$(wildcard $(dir)/*.cpp))
-# Exclude main.cpp files from core objects
-CORE_SOURCES = $(filter-out src/server/main.cpp src/client/main.cpp, $(SOURCES))
+# Exclude main.cpp and old files from core objects
+CORE_SOURCES = $(filter-out src/server/main.cpp src/client/main.cpp src/exec/executor/executor.cpp src/sql/parser/parser.cpp src/sql/ast/ast_node.cpp src/sql/ast/statements.cpp, $(SOURCES))
 OBJECTS = $(CORE_SOURCES:.cpp=.o)
 
-# Test files
-UNIT_TEST_SOURCES = tests/unit/test_types.cpp tests/unit/test_parser.cpp tests/unit/test_crash_handler.cpp \
-                   tests/unit/test_allocator.cpp tests/unit/test_arena.cpp tests/unit/test_logger.cpp \
-                   tests/unit/test_storage.cpp tests/unit/test_parser_extended.cpp tests/unit/test_operators.cpp \
-                   tests/unit/test_executor.cpp tests/unit/test_network.cpp tests/unit/test_crash_handler_extended.cpp \
-                   tests/unit/test_command_history.cpp tests/unit/test_storage_simple.cpp tests/unit/test_network_simple.cpp \
-                   tests/unit/test_cli_client.cpp tests/unit/test_where_clause.cpp
-INTEGRATION_TEST_SOURCES = tests/integration/test_full_system.cpp
+# Test files - organized by module
+COMMON_TEST_SOURCES = tests/unit/common/test_types.cpp tests/unit/common/test_crash_handler.cpp tests/unit/common/test_crash_handler_extended.cpp
+MEMORY_TEST_SOURCES = tests/unit/memory/test_allocator.cpp tests/unit/memory/test_arena.cpp
+LOG_TEST_SOURCES = tests/unit/log/test_logger.cpp
+PARSER_TEST_SOURCES = tests/unit/sql/parser/test_parser.cpp tests/unit/sql/parser/test_tokenizer.cpp \
+                      tests/unit/sql/parser/test_parser_ddl.cpp tests/unit/sql/parser/test_parser_dml.cpp \
+                      tests/unit/sql/parser/test_parser_expressions.cpp
+COMPILER_TEST_SOURCES = tests/unit/sql/compiler/test_compiler_ddl.cpp tests/unit/sql/compiler/test_compiler_dml.cpp \
+                        tests/unit/sql/compiler/test_compiler_semantic.cpp tests/unit/sql/compiler/test_expression_clone.cpp
+OPTIMIZER_TEST_SOURCES = tests/unit/sql/optimizer/test_optimizer.cpp
+STORAGE_TEST_SOURCES = tests/unit/storage/test_storage.cpp tests/unit/storage/test_storage_simple.cpp
+EXECUTOR_TEST_SOURCES = tests/unit/exec/executor/test_executor.cpp tests/unit/exec/executor/test_expression_eval.cpp
+OPERATOR_TEST_SOURCES = tests/unit/exec/operators/test_operators.cpp
+PLANNER_TEST_SOURCES = tests/unit/exec/plan/test_planner_ddl.cpp tests/unit/exec/plan/test_planner_dml.cpp
+NETWORK_TEST_SOURCES = tests/unit/net/test_network.cpp tests/unit/net/test_network_simple.cpp
+CLIENT_TEST_SOURCES = tests/unit/client/test_command_history.cpp
+
+UNIT_TEST_SOURCES = $(COMMON_TEST_SOURCES) $(MEMORY_TEST_SOURCES) $(LOG_TEST_SOURCES) $(PARSER_TEST_SOURCES) \
+                    $(COMPILER_TEST_SOURCES) $(OPTIMIZER_TEST_SOURCES) $(STORAGE_TEST_SOURCES) \
+                    $(EXECUTOR_TEST_SOURCES) $(OPERATOR_TEST_SOURCES) $(PLANNER_TEST_SOURCES) \
+                    $(NETWORK_TEST_SOURCES) $(CLIENT_TEST_SOURCES)
+INTEGRATION_TEST_SOURCES = tests/integration/test_full_system.cpp tests/integration/test_e2e_basic.cpp
 TEST_SOURCES = $(UNIT_TEST_SOURCES) $(INTEGRATION_TEST_SOURCES)
 TEST_OBJECTS = $(TEST_SOURCES:.cpp=.o)
-TEST_TARGETS = $(TEST_SOURCES:.cpp=)
 
 # Test target names
-UNIT_TEST_TARGETS = test_types test_parser test_crash_handler test_allocator test_arena test_logger \
-                   test_storage test_parser_extended test_operators test_executor test_network test_crash_handler_extended \
-                   test_command_history test_storage_simple test_network_simple test_cli_client test_where_clause
-INTEGRATION_TEST_TARGETS = test_full_system
+COMMON_TEST_TARGETS = test_types test_crash_handler test_crash_handler_extended
+MEMORY_TEST_TARGETS = test_allocator test_arena
+LOG_TEST_TARGETS = test_logger
+PARSER_TEST_TARGETS = test_parser test_tokenizer test_parser_ddl test_parser_dml test_parser_expressions
+COMPILER_TEST_TARGETS = test_compiler_ddl test_compiler_dml test_compiler_semantic test_expression_clone
+OPTIMIZER_TEST_TARGETS = test_optimizer
+STORAGE_TEST_TARGETS = test_storage test_storage_simple
+EXECUTOR_TEST_TARGETS = test_executor test_expression_eval
+OPERATOR_TEST_TARGETS = test_operators
+PLANNER_TEST_TARGETS = test_planner_ddl test_planner_dml
+NETWORK_TEST_TARGETS = test_network test_network_simple
+CLIENT_TEST_TARGETS = test_command_history
+
+UNIT_TEST_TARGETS = $(COMMON_TEST_TARGETS) $(MEMORY_TEST_TARGETS) $(LOG_TEST_TARGETS) $(PARSER_TEST_TARGETS) \
+                    $(COMPILER_TEST_TARGETS) $(OPTIMIZER_TEST_TARGETS) $(STORAGE_TEST_TARGETS) \
+                    $(EXECUTOR_TEST_TARGETS) $(OPERATOR_TEST_TARGETS) $(PLANNER_TEST_TARGETS) \
+                    $(NETWORK_TEST_TARGETS) $(CLIENT_TEST_TARGETS)
+INTEGRATION_TEST_TARGETS = test_full_system test_e2e_basic
 ALL_TEST_TARGETS = $(UNIT_TEST_TARGETS) $(INTEGRATION_TEST_TARGETS)
 
 # Default target
@@ -41,76 +68,119 @@ dbcli: $(OBJECTS) src/client/main.o
 	@mkdir -p bin
 	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
 
-# Unit test targets
-test_types: $(OBJECTS) tests/unit/test_types.o
+# Common module tests
+test_types: $(OBJECTS) tests/unit/common/test_types.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_parser: $(OBJECTS) tests/unit/test_parser.o
+test_crash_handler: $(OBJECTS) tests/unit/common/test_crash_handler.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_crash_handler: $(OBJECTS) tests/unit/test_crash_handler.o
+test_crash_handler_extended: $(OBJECTS) tests/unit/common/test_crash_handler_extended.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_allocator: $(OBJECTS) tests/unit/test_allocator.o
+# Memory module tests
+test_allocator: $(OBJECTS) tests/unit/memory/test_allocator.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_arena: $(OBJECTS) tests/unit/test_arena.o
+test_arena: $(OBJECTS) tests/unit/memory/test_arena.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_logger: $(OBJECTS) tests/unit/test_logger.o
+# Log module tests
+test_logger: $(OBJECTS) tests/unit/log/test_logger.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_storage: $(OBJECTS) tests/unit/test_storage.o
+# Parser module tests
+test_parser: $(OBJECTS) tests/unit/sql/parser/test_parser.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_storage_simple: $(OBJECTS) tests/unit/test_storage_simple.o
+test_tokenizer: $(OBJECTS) tests/unit/sql/parser/test_tokenizer.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_parser_extended: $(OBJECTS) tests/unit/test_parser_extended.o
+test_parser_ddl: $(OBJECTS) tests/unit/sql/parser/test_parser_ddl.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_operators: $(OBJECTS) tests/unit/test_operators.o
+test_parser_dml: $(OBJECTS) tests/unit/sql/parser/test_parser_dml.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_executor: $(OBJECTS) tests/unit/test_executor.o
+test_parser_expressions: $(OBJECTS) tests/unit/sql/parser/test_parser_expressions.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_network: $(OBJECTS) tests/unit/test_network.o
+# Compiler module tests
+test_compiler_ddl: $(OBJECTS) tests/unit/sql/compiler/test_compiler_ddl.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_network_simple: $(OBJECTS) tests/unit/test_network_simple.o
+test_compiler_dml: $(OBJECTS) tests/unit/sql/compiler/test_compiler_dml.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_crash_handler_extended: $(OBJECTS) tests/unit/test_crash_handler_extended.o
+test_compiler_semantic: $(OBJECTS) tests/unit/sql/compiler/test_compiler_semantic.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_command_history: $(OBJECTS) tests/unit/test_command_history.o
+test_expression_clone: $(OBJECTS) tests/unit/sql/compiler/test_expression_clone.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_cli_client: $(OBJECTS) tests/unit/test_cli_client.o
+# Optimizer module tests
+test_optimizer: $(OBJECTS) tests/unit/sql/optimizer/test_optimizer.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_cli_client_simple: $(OBJECTS) tests/unit/test_cli_client_simple.o
+# Storage module tests
+test_storage: $(OBJECTS) tests/unit/storage/test_storage.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
-test_where_clause: $(OBJECTS) tests/unit/test_where_clause.o
+test_storage_simple: $(OBJECTS) tests/unit/storage/test_storage_simple.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+# Executor module tests
+test_executor: $(OBJECTS) tests/unit/exec/executor/test_executor.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+test_expression_eval: $(OBJECTS) tests/unit/exec/executor/test_expression_eval.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+# Operator module tests
+test_operators: $(OBJECTS) tests/unit/exec/operators/test_operators.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+# Planner module tests
+test_planner_ddl: $(OBJECTS) tests/unit/exec/plan/test_planner_ddl.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+test_planner_dml: $(OBJECTS) tests/unit/exec/plan/test_planner_dml.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+# Network module tests
+test_network: $(OBJECTS) tests/unit/net/test_network.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+test_network_simple: $(OBJECTS) tests/unit/net/test_network_simple.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+# Client module tests
+test_command_history: $(OBJECTS) tests/unit/client/test_command_history.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
@@ -159,3 +229,7 @@ test: test_unit
 rebuild: clean all
 
 .PHONY: all clean test test_unit test_integration rebuild
+# E2E test
+test_e2e_basic: $(OBJECTS) tests/integration/test_e2e_basic.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread

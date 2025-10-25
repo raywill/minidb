@@ -1,8 +1,11 @@
 #pragma once
 
 #include "net/tcp_server.h"
-#include "exec/executor/executor.h"
-#include "sql/parser/parser.h"
+#include "exec/executor/new_executor.h"
+#include "exec/plan/planner.h"
+#include "sql/parser/new_parser.h"
+#include "sql/compiler/compiler.h"
+#include "sql/optimizer/optimizer.h"
 #include "storage/catalog.h"
 #include "storage/table.h"
 #include "common/status.h"
@@ -34,7 +37,10 @@ private:
     
     std::unique_ptr<Catalog> catalog_;
     std::unique_ptr<TableManager> table_manager_;
-    std::unique_ptr<Executor> executor_;
+    std::unique_ptr<Compiler> compiler_;
+    std::unique_ptr<Optimizer> optimizer_;
+    std::unique_ptr<Planner> planner_;
+    std::unique_ptr<QueryExecutor> executor_;
     std::unique_ptr<TCPServer> tcp_server_;
     
     // 初始化数据库组件

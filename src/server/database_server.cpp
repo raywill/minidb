@@ -87,9 +87,18 @@ Status DatabaseServer::initialize_database() {
     
     // 初始化表管理器
     table_manager_ = make_unique<TableManager>(catalog_.get());
-    
+
+    // 初始化编译器
+    compiler_ = make_unique<Compiler>(catalog_.get());
+
+    // 初始化优化器
+    optimizer_ = make_unique<Optimizer>();
+
+    // 初始化计划器
+    planner_ = make_unique<Planner>(catalog_.get(), table_manager_.get());
+
     // 初始化执行器
-    executor_ = make_unique<Executor>(catalog_.get(), table_manager_.get());
+    executor_ = make_unique<QueryExecutor>(catalog_.get(), table_manager_.get());
     
     LOG_INFO("DatabaseServer", "Initialize", "Database components initialized successfully");
     return Status::OK();
@@ -99,23 +108,58 @@ std::string DatabaseServer::process_sql(const std::string& sql) {
     if (sql.empty()) {
         return format_error_response("Empty SQL statement");
     }
-    
-    // 解析SQL
-    Parser parser(sql);
-    std::unique_ptr<Statement> stmt;
-    Status status = parser.parse(stmt);
-    
+
+    // 1. 解析SQL -> AST
+    SQLParser parser(sql);
+    std::unique_ptr<StmtAST> ast;
+    Status status = parser.parse(ast);
+
     if (!status.ok()) {
         return format_error_response("Parse error: " + status.ToString());
     }
-    
-    if (!stmt) {
+
+    if (!ast) {
         return format_error_response("Failed to parse SQL statement");
     }
-    
-    // 执行SQL
-    QueryResult result = executor_->execute_statement(stmt.get());
-    
+
+    // 2. 编译AST -> Statement
+    std::unique_ptr<Statement> stmt;
+    status = compiler_->compile(ast.get(), stmt);
+
+    if (!status.ok()) {
+        return format_error_response("Compile error: " + status.ToString());
+    }
+
+    if (!stmt) {
+        return format_error_response("Failed to compile AST");
+    }
+
+    // 3. 优化Statement
+    std::unique_ptr<Statement> optimized_stmt;
+    status = optimizer_->optimize(stmt.get(), optimized_stmt);
+
+    if (!status.ok()) {
+        return format_error_response("Optimization error: " + status.ToString());
+    }
+
+    // 如果优化器返回了新的Statement，使用它；否则使用原来的
+    Statement* stmt_to_plan = optimized_stmt ? optimized_stmt.get() : stmt.get();
+
+    // 4. 生成执行计划
+    std::unique_ptr<Plan> plan;
+    status = planner_->create_plan(stmt_to_plan, plan);
+
+    if (!status.ok()) {
+        return format_error_response("Planning error: " + status.ToString());
+    }
+
+    if (!plan) {
+        return format_error_response("Failed to create execution plan");
+    }
+
+    // 5. 执行计划
+    QueryResult result = executor_->execute_plan(plan.get());
+
     if (result.success) {
         return format_success_response(result.result_text);
     } else {

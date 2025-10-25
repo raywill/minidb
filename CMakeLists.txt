@@ -42,10 +42,17 @@ set(LOG_SOURCES
 )
 
 set(PARSER_SOURCES
-    src/sql/parser/parser.cpp
+    # 旧文件（暂时注释掉）
+    # src/sql/parser/parser.cpp
     src/sql/parser/tokenizer.cpp
-    src/sql/ast/ast_node.cpp
-    src/sql/ast/statements.cpp
+    # src/sql/ast/ast_node.cpp
+    # src/sql/ast/statements.cpp
+    # 新架构文件
+    src/sql/parser/new_parser.cpp
+    src/sql/ast/ast.cpp
+    src/sql/compiler/statement.cpp
+    src/sql/compiler/compiler.cpp
+    src/sql/optimizer/optimizer.cpp
 )
 
 set(STORAGE_SOURCES
@@ -59,7 +66,12 @@ set(EXECUTION_SOURCES
     src/exec/operators/final_result_operator.cpp
     src/exec/operators/projection_operator.cpp
     src/exec/operators/scan_operator.cpp
-    src/exec/executor/executor.cpp
+    # 旧文件（暂时注释掉）
+    # src/exec/executor/executor.cpp
+    # 新架构文件
+    src/exec/plan/plan.cpp
+    src/exec/plan/planner.cpp
+    src/exec/executor/new_executor.cpp
 )
 
 set(NETWORK_SOURCES
@@ -105,29 +117,142 @@ target_link_libraries(dbcli minidb_core)
 option(BUILD_TESTS "Build test programs" ON)
 
 if(BUILD_TESTS)
-    # 单元测试
-    set(UNIT_TESTS
-        test_types
-        test_parser
-        test_crash_handler
-        test_allocator
-        test_arena
-        test_logger
-        test_storage
-        test_storage_simple
-        test_parser_extended
-        test_operators
-        test_executor
-        test_network
-        test_network_simple
-        test_crash_handler_extended
-        test_command_history
-    )
+    # 单元测试 - 按模块组织
 
-    foreach(test_name ${UNIT_TESTS})
-        add_executable(${test_name} tests/unit/${test_name}.cpp)
+    # Common模块测试
+    set(COMMON_TESTS
+        test_types
+        test_crash_handler
+        test_crash_handler_extended
+    )
+    foreach(test_name ${COMMON_TESTS})
+        add_executable(${test_name} tests/unit/common/${test_name}.cpp)
         target_link_libraries(${test_name} minidb_core)
     endforeach()
+
+    # Memory模块测试
+    set(MEMORY_TESTS
+        test_allocator
+        test_arena
+    )
+    foreach(test_name ${MEMORY_TESTS})
+        add_executable(${test_name} tests/unit/memory/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # Log模块测试
+    set(LOG_TESTS
+        test_logger
+    )
+    foreach(test_name ${LOG_TESTS})
+        add_executable(${test_name} tests/unit/log/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # SQL Parser模块测试
+    set(PARSER_TESTS
+        test_parser
+        test_tokenizer
+        test_parser_ddl
+        test_parser_dml
+        test_parser_expressions
+    )
+    foreach(test_name ${PARSER_TESTS})
+        add_executable(${test_name} tests/unit/sql/parser/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # SQL Compiler模块测试
+    set(COMPILER_TESTS
+        test_compiler_ddl
+        test_compiler_dml
+        test_compiler_semantic
+    )
+    foreach(test_name ${COMPILER_TESTS})
+        add_executable(${test_name} tests/unit/sql/compiler/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # SQL Optimizer模块测试
+    set(OPTIMIZER_TESTS
+        test_optimizer
+    )
+    foreach(test_name ${OPTIMIZER_TESTS})
+        add_executable(${test_name} tests/unit/sql/optimizer/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # Storage模块测试
+    set(STORAGE_TESTS
+        test_storage
+        test_storage_simple
+    )
+    foreach(test_name ${STORAGE_TESTS})
+        add_executable(${test_name} tests/unit/storage/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # Execution模块测试
+    set(EXECUTOR_TESTS
+        test_executor
+    )
+    foreach(test_name ${EXECUTOR_TESTS})
+        add_executable(${test_name} tests/unit/exec/executor/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    set(OPERATOR_TESTS
+        test_operators
+    )
+    foreach(test_name ${OPERATOR_TESTS})
+        add_executable(${test_name} tests/unit/exec/operators/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # Planner模块测试
+    set(PLANNER_TESTS
+        test_planner_ddl
+        test_planner_dml
+    )
+    foreach(test_name ${PLANNER_TESTS})
+        add_executable(${test_name} tests/unit/exec/plan/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # Network模块测试
+    set(NETWORK_TESTS
+        test_network
+        test_network_simple
+    )
+    foreach(test_name ${NETWORK_TESTS})
+        add_executable(${test_name} tests/unit/net/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # Client模块测试
+    set(CLIENT_TESTS
+        test_command_history
+    )
+    foreach(test_name ${CLIENT_TESTS})
+        add_executable(${test_name} tests/unit/client/${test_name}.cpp)
+        target_link_libraries(${test_name} minidb_core)
+    endforeach()
+
+    # 所有单元测试列表
+    set(UNIT_TESTS
+        ${COMMON_TESTS}
+        ${MEMORY_TESTS}
+        ${LOG_TESTS}
+        ${PARSER_TESTS}
+        ${COMPILER_TESTS}
+        ${OPTIMIZER_TESTS}
+        ${STORAGE_TESTS}
+        ${EXECUTOR_TESTS}
+        ${OPERATOR_TESTS}
+        ${PLANNER_TESTS}
+        ${NETWORK_TESTS}
+        ${CLIENT_TESTS}
+    )
 
     # 集成测试
     add_executable(test_full_system tests/integration/test_full_system.cpp)

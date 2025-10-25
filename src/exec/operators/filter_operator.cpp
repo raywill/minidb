@@ -185,17 +185,17 @@ Status ExpressionEvaluator::evaluate(const DataChunk& chunk, std::vector<bool>& 
 }
 
 Status ExpressionEvaluator::evaluate_expression(Expression* expr, const DataChunk& chunk, size_t row_index, std::string& result) {
-    switch (expr->get_type()) {
-        case ASTNodeType::LITERAL_EXPR:
-            return evaluate_literal(static_cast<LiteralExpression*>(expr), result);
-        case ASTNodeType::COLUMN_REF_EXPR:
-            return evaluate_column_ref(static_cast<ColumnRefExpression*>(expr), chunk, row_index, result);
-        case ASTNodeType::BINARY_EXPR:
-            return evaluate_binary_expr(static_cast<BinaryExpression*>(expr), chunk, row_index, result);
-        case ASTNodeType::FUNCTION_EXPR:
-            return evaluate_function_expr(static_cast<FunctionExpression*>(expr), chunk, row_index, result);
-        default:
-            return Status::ExecutionError("Unsupported expression type");
+    // 使用dynamic_cast判断Expression类型
+    if (auto* literal = dynamic_cast<LiteralExpression*>(expr)) {
+        return evaluate_literal(literal, result);
+    } else if (auto* col_ref = dynamic_cast<ColumnRefExpression*>(expr)) {
+        return evaluate_column_ref(col_ref, chunk, row_index, result);
+    } else if (auto* binary = dynamic_cast<BinaryExpression*>(expr)) {
+        return evaluate_binary_expr(binary, chunk, row_index, result);
+    } else if (auto* func = dynamic_cast<FunctionExpression*>(expr)) {
+        return evaluate_function_expr(func, chunk, row_index, result);
+    } else {
+        return Status::ExecutionError("Unsupported expression type");
     }
 }
 
