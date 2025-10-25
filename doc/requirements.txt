@@ -1,0 +1,321 @@
+目标：从头实现一个单机、列存、向量化执行、支持基本 SQL（CREATE/DROP/INSERT/SELECT/DELETE）的数据库，并提供一个通过 TCP 连接的命令行客户端。系统采用 C++11 实现，模块化设计（parser、compiler、optimizer、plan、execution、operator 等层次），算子采用 push 风格数据流。文档在功能、接口、内部结构、错误/内存处理、测试与里程碑等方面进行细化，便于之后实现与扩展（可参考 DuckDB、ClickHouse、Doris 的设计思想）。
+
+单机数据库系统需求说明文档
+
+一、总体目标
+
+本项目实现一个单机版关系型数据库系统，具备以下核心能力：
+  1.  支持基本 SQL 操作：CREATE TABLE、DROP TABLE、INSERT、SELECT、DELETE。
+  2.  提供一个命令行客户端，通过 TCP 连接数据库服务器执行 SQL。
+  3.  数据库存储采用列式存储，支持持久化到磁盘。
+  4.  查询执行采用向量化（Vectorized Execution）+ Push 模式的算子架构。
+  5.  无事务支持，采用 table-level 锁保证安全性。
+  6.  内存分配通过统一的 Allocator / Arena 封装。
+  7.  系统采用 C++ 编写，兼容 C++11 标准。
+  8.  模块化设计。每个模块都要写好单元测试。模块之间的整合也要有配套测试。
+
+⸻
+
+二、项目结构概述
+
+项目分为以下主要模块：
+  • Server 层：
+管理 TCP 连接、接收客户端请求、调度 SQL 执行。
+  • Client 层：
+命令行客户端，连接数据库服务器、发送 SQL、接收并打印结果。
+  • Parser 层：
+SQL 语法解析，生成语法树（AST）。
+  • Compiler 层：
+将 AST 转换为逻辑计划（Logical Plan）。
+  • Optimizer 层：
+对逻辑计划进行简单优化（如谓词下推、列裁剪）。
+  • Planner 层：
+将逻辑计划转化为物理计划（Physical Plan）。
+  • Executor 层：
+执行物理计划，通过 Operator 链进行数据流动。
+  • Operator 层：
+负责实现 SCAN、FILTER、PROJECTION、FINAL_RESULT 等基础算子。
+  • Storage 层：
+提供表的存储与访问能力，采用列式持久化结构。
+  • Memory 管理层：
+通过 Allocator/Arena 封装内存分配。
+  • Error Handling 层：
+负责捕获系统异常，转化为错误消息返回客户端。
+
+
+三、系统交互流程
+  1.  用户通过命令行客户端输入 SQL。
+  2.  客户端建立 TCP 连接，将 SQL 文本发送至服务器。
+  3.  Server 接收 SQL 请求 → 调用 Parser 解析 → 生成 AST。
+  4.  Compiler 将 AST 转换为逻辑计划。
+  5.  Optimizer 对逻辑计划进行优化。
+  6.  Planner 转化为物理计划（Plan Node）。
+  7.  Executor 执行物理计划：
+  • 构建 Operator pipeline。
+  • 数据通过列向量在 Operator 之间 push。
+  8.  执行结果转换为文本行格式。
+  9.  Server 将结果返回给 Client。
+  10. Client 输出到终端。
+
+
+
+四、SQL 支持说明
+
+1. CREATE TABLE
+
+语法示例：
+CREATE TABLE student(id INT, name STRING, age INT);
+CREATE TABLE IF NOT EXIST student(id INT, name STRING, age INT);
+功能说明：
+  • 创建表的元数据文件。
+  • 每个表对应一个目录，列数据存储为独立文件。
+
+支持的数据类型包括：INT, STRING, BOOL, DECIMAL
+
+2. DROP TABLE
+
+语法示例：
+DROP TABLE student;
+DROP TABLE IF EXIST student;
+
+功能说明：
+  • 删除表目录及所有列文件。
+  • 从全局 catalog 中移除元数据。
+
+
+3. INSERT
+
+语法示例：
+INSERT INTO student VALUES (1, 'Alice', 20), (2, 'Bob', 21);
+
+功能说明：
+  • 支持一次插入多行。
+  • 允许在内存中构建列向量后批量写入。
+  • 每次插入重写列文件（不做增量写入）。
+
+
+4. SELECT
+
+语法示例：
+SELECT id, name FROM student WHERE age > 18;
+功能说明：
+  • 构建以下算子链：
+SCAN → FILTER → PROJECTION → FINAL_RESULT
+  • 结果以文本表格形式返回客户端。
+  • 暂不支持 JOIN、ORDER BY、GROUP BY。
+
+
+5. DELETE
+
+语法示例：
+DELETE FROM student WHERE age < 18;
+功能说明：
+  • 通过读写列文件实现删除：
+  1.  扫描满足条件的行。
+  2.  重写文件，去除被删除行。
+  • 无事务支持，执行期间表加独占锁。
+
+
+6. 运算支持
+算数运算加减乘除
+
+6. 函数支持
+支持 sin/cos/substr 
+
+五、存储层设计
+
+1. 存储组织
+  • 每个表对应一个目录：data/<table_name>/
+  • 每列对应一个独立文件：<column_name>.col
+  • 每个文件保存该列的所有数据，以二进制形式存储。
+
+示例目录结构：
+/data/
+  ├── db.meta.json        # 全局元信息
+  ├── table1/
+  │   ├── schema.json     # 表结构定义
+  │   ├── col_0.bin       # 列0数据文件
+  │   ├── col_1.bin       # 列1数据文件
+  │   └── ...
+  └── table2/
+      └── ...
+
+
+
+2. 数据格式
+
+列文件存储格式（简化版）：
+  • 文件头：magic number + 列类型 + 行数
+  • 文件体：连续存储的列值向量
+  • 所有列文件在重写时对齐行数
+
+示例：
+[Header: MAGIC, TYPE=INT, ROWS=100]
+[Data: 100个连续的int值]
+
+
+3. 文件读写流程
+  • 读：
+当执行 SCAN 时，从各列文件加载数据块（向量大小固定，例如 1024 行）。
+  • 写：
+每次插入/删除后，重写对应列文件。
+  • 落盘：
+写操作完成后显式 fsync 确保持久化。
+
+
+
+4. 锁机制
+  • 表级互斥锁，防止同时写入。
+  • 多客户端允许并发读，不允许并发写。
+
+
+六、内存管理要求
+  1.  禁止直接使用 malloc/new，统一通过 Allocator/Arena 接口分配。
+  2.  Arena 用于短期内存生命周期管理（如查询中间结果）。
+  3.  Allocator 负责封装底层分配逻辑、统计内存用量。
+  4.  所有模块的内存申请必须通过 Allocator 接口。
+
+示例接口：
+class Allocator {
+ public:
+  void* allocate(size_t size);
+  void free(void* ptr);
+};
+
+class Arena {
+ public:
+  explicit Arena(Allocator* alloc);
+  void* allocate(size_t size);
+  void reset();
+};
+
+七、算子与执行模型
+
+1. Operator 执行流（Push 模型）
+  • 上游 Operator 主动将数据 Push 给下游。
+  • 每个 Operator 接受输入列向量，输出列向量。
+
+示例：
+ScanOp → FilterOp → ProjectionOp → FinalResultOp
+
+
+2. Vector 数据结构
+
+struct ColumnVector {
+  std::string name;
+  DataType type;
+  std::vector<uint8_t> data;  // 连续内存块
+  size_t size;                // 行数
+};
+
+
+3. 执行步骤
+  1.  SCAN：从存储层读取列文件，生成向量块。
+  2.  FILTER：执行谓词过滤，生成新的有效行掩码。
+  3.  PROJECTION：选择目标列。
+  4.  FINAL_RESULT：将结果格式化为文本输出。
+
+
+
+八、异常与错误处理
+  1.  内存不足或文件 I/O 失败时，抛出异常。
+  2.  在执行器最上层（Executor）捕获异常，转化为错误文本。
+  3.  错误文本格式：
+ERROR: <message>
+例如：Error: memory allocation failed
+  4.  客户端直接打印错误信息。
+
+
+
+九、TCP 通信协议
+
+1. 通信模型
+  • 单 TCP 长连接。
+  • 客户端发送文本 SQL。
+  • 服务端返回执行结果文本。
+
+2. 协议格式
+  • 简单的文本协议。
+  • 每个请求/响应以 \n\n 分隔。
+
+示例：
+Client → "SELECT * FROM student;\n\n"
+Server → "id | name | age\n1 | Alice | 20\n2 | Bob | 21\n\n"
+
+$ ./dbcli localhost 9876
+> CREATE TABLE t(id INT, name STRING);
+> INSERT INTO t VALUES (1, 'Alice'), (2, 'Bob');
+> SELECT * FROM t;
+id | name
+1  | Alice
+2  | Bob
+
+
+十、编译与运行
+  1.  C++ 标准：C++11
+  2.  构建系统：CMake
+  3.  目标平台：Linux / macOS / ARM / x86_64
+  4.  目录结构建议：
+/src
+  /common        // 常用类型、Status、Logging、Config
+  /net           // TCP server/client, protocol
+  /sql
+    /parser
+    /ast
+    /binder
+    /planner
+    /optimizer
+  /exec
+    /operators
+    /executor
+  /storage
+    /catalog
+    /table
+  /mem          // Allocator, Arena, MemoryPool
+  /tests
+/tools
+  client_cli
+CMakeLists.txt
+
+十一、日志系统（Logger）
+
+用于跟踪数据库运行状态、调试信息、错误信息、性能指标，要求具备以下能力：
+  1.  统一日志接口：所有模块（parser / executor / storage / client / network 等）均通过统一接口记录日志。
+  2.  多级别日志输出：支持 DEBUG、INFO、WARN、ERROR、FATAL 等日志级别。
+  3.  输出目标：支持输出到文件
+  5.  线程安全：支持多线程同时写日志。
+  6.  轻量化与性能可控：日志记录对系统性能影响应最小。
+  7.  调试可视化友好：日志包含模块名称、线程ID、时间戳、日志级别等元信息。
+  8.  错误溯源能力：支持简单的上下文堆栈或 Query ID 跟踪。
+enum class LogLevel {
+  DEBUG = 0,
+  INFO,
+  WARN,
+  ERROR,
+  FATAL
+};
+
+例如：
+[2025-10-25 12:03:14.523] [INFO] [TID=42] [Executor] [Query#17] Executing SELECT on table 'student'
+[2025-10-25 12:03:14.531] [DEBUG] [TID=42] [Operator:SCAN] [Query#17] Read 1024 rows from column 'id'
+[2025-10-25 12:03:14.732] [ERROR] [TID=42] [Storage] [Query#17] Failed to open file 'student/age.col'
+
+#define LOG_DEBUG(module, ctx, msg) 
+
+LOG_INFO("Server", "Startup", "Database server started on port 5432");
+LOG_DEBUG("Parser", "Query#19", "Parsed SELECT statement successfully");
+LOG_ERROR("Storage", "student", "Failed to write column 'age.col'");
+
+
+十二、性能与实现细节建议（优化点）
+  • 批大小选择：默认 1024，依据 CPU 缓存与分支预测调整。提供配置项。
+  • 避免频繁内存分配：使用 Arena + reuse buffers。
+
+十三、开发与验收标准（Definition of Done）
+  • 基本 SQL 语法解析正确（能解析用户提供的合法 SQL，并对非法 SQL 给出清晰错误）。
+  • Server + CLI 能在本地建立 TCP 连接并交互。
+  • CREATE/DROP/INSERT/SELECT/DELETE 在内存中正确工作，SELECT 的返回结果与预期一致。
+  • 向量化执行路径（SCAN->FILTER->PROJECTION->FINAL_RESULT）在执行器中被实现并通过集成测试。
+  • 内存分配全部使用 Allocator/Arena，并在分配失败时能上抛错误，最终由执行器顶层返回给客户端。
+  • 提交代码包含单元测试和基本的 benchmark，并且有 README/构建说明。
+

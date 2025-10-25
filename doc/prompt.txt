@@ -1,0 +1,143 @@
+You are an expert C++ database systems engineer with deep experience in the design and implementation of modern analytical databases such as DuckDB, ClickHouse, and Doris.
+
+You are now going to **build a fully functional single-node analytical SQL database system** from scratch, in **C++11**, following the complete system specification document located at:
+`doc/requirements.txt`
+
+---
+
+### 🎯 Project Goal
+
+Implement a **single-machine, columnar, vectorized-execution relational database** that supports basic SQL commands and a TCP-based command-line client.  
+The database should include parsing, compilation, optimization, planning, execution (push-based operator pipeline), storage, memory management, logging, and extensibility.  
+All behaviors, interfaces, error handling, and persistence rules are defined in `doc/requirements.txt`.
+
+---
+
+### 🧩 Key Responsibilities
+
+1. **Read and understand `doc/requirements.txt` completely.**  
+   This document defines every module, API contract, execution flow, SQL semantics, and internal behavior. Follow it *exactly* unless otherwise specified.
+
+2. **Generate a modular C++ project layout**, with the following core directories:
+   - `src/server/` – TCP server, session loop, SQL request handling
+   - `src/client/` – interactive command-line client
+   - `src/sql/parser/` – SQL tokenizer, parser, AST builder
+   - `src/sql/compiler/` – logical plan builder
+   - `src/sql/optimizer/` – rule-based optimization (predicate pushdown, projection pruning)
+   - `src/sql/planner/` – physical plan translation
+   - `src/exec/` – execution engine and operator pipeline
+   - `src/exec/operators/` – SCAN, FILTER, PROJECTION, FINAL_RESULT
+   - `src/storage/` – table metadata, column file IO, catalog
+   - `src/mem/` – Allocator, Arena
+   - `src/log/` – Logger with multi-level logging (DEBUG, INFO, WARN, ERROR, FATAL)
+   - `include/` – public headers
+   - `tests/` – unit and integration tests
+   - `tools/` – command-line client executable
+   - `CMakeLists.txt` – top-level build configuration
+
+3. **Follow architectural layering strictly**:
+   Parser → Compiler → Optimizer → Planner → Executor → Operator → Storage
+
+4. **Execution engine**:
+   - Push-based pipeline (upstream pushes column vectors downstream)
+   - Operators communicate via `ColumnVector` batches (default batch size 1024)
+   - Implement SCAN, FILTER, PROJECTION, FINAL_RESULT operators first
+   - Vectorized, columnar execution model as described in requirements
+
+5. **Storage engine**:
+   - Columnar format, each table directory has per-column binary files
+   - Full rewrite on insert/delete (no delta)
+   - Persistent across server restarts
+   - Table-level locking (no transactions)
+
+6. **SQL support**:
+   - CREATE TABLE, DROP TABLE, INSERT (multi-row), SELECT (with WHERE), DELETE
+   - Supported types: INT, STRING, BOOL, DECIMAL
+   - Supported functions: sin, cos, substr
+
+7. **Memory management**:
+   - Use custom `Allocator` and `Arena` only
+   - No raw `malloc` or `new` calls
+   - All temporary allocations go through Arena
+   - Allocation failures must throw and be caught at executor top level
+
+8. **Error handling**:
+   - Any exception (allocation, file IO, syntax, etc.) must propagate up and be caught at the Executor top level
+   - Returned to client as:  
+     `ERROR: <message>`
+
+9. **Logging**:
+   - Implement a unified logging facility:
+     - Levels: DEBUG, INFO, WARN, ERROR, FATAL
+     - Include timestamp, thread ID, module, context (e.g., Query ID)
+     - Output to log file
+     - Thread-safe
+   - Example:  
+     `[2025-10-25 12:03:14.523] [INFO] [TID=42] [Executor] [Query#17] Executing SELECT on table 'student'`
+
+10. **TCP protocol**:
+    - Simple text-based request/response protocol
+    - Client sends SQL text terminated by `\n\n`
+    - Server responds with textual table output or error message
+    - Example:
+      ```
+      Client → "SELECT * FROM student;\n\n"
+      Server → "id | name | age\n1 | Alice | 20\n2 | Bob | 21\n\n"
+      ```
+
+11. **Plugin / extensibility system**:
+    - Implement a lightweight plugin manager for future extension
+    - Allow registering new SQL functions via plugin mechanism (e.g., `load_function_plugin("udf_math.so")`)
+    - Plugin functions must register with a global registry at load time
+
+12. **CMake build configuration**:
+    - C++11
+    - Warnings as errors for new code
+    - Platform: Linux/macOS, ARM/x86_64
+    - Out-of-source build support
+
+13. **Testing**:
+    - Write unit tests for all layers (parser, storage, operators, executor)
+    - Integration test for full SQL flow: CREATE → INSERT → SELECT → DELETE
+    - Provide lightweight benchmarks for SCAN performance
+
+14. **Error resilience**:
+    - Catch and convert all runtime exceptions to safe error text
+    - Ensure no resource leaks in error path (e.g., file handles, memory arenas)
+
+15. **Deliverables**:
+    - Complete compilable C++ codebase
+    - CLI binary (e.g., `dbcli`)
+    - Server binary (e.g., `dbserver`)
+    - Basic README with build instructions and example session
+
+---
+
+### 🏁 Implementation Plan
+
+1. Generate project skeleton and `CMakeLists.txt`
+2. Implement utility libraries: logging, allocator, arena
+3. Build parser (tokenizer, AST, simple grammar)
+4. Implement storage engine (catalog, table directory, read/write)
+5. Implement execution engine and operators
+6. Implement TCP server/client
+7. Integrate full SQL execution pipeline
+8. Add plugin manager
+9. Add unit and integration tests
+10. Final cleanup, documentation, and examples
+
+---
+
+### 🧠 Development Guidelines
+
+- Follow standard C++11 style and RAII principles
+- Use smart pointers where appropriate
+- No external libraries unless essential (e.g., standard C++)
+- Modular, self-contained components
+- All code must compile and run locally (`cmake . && make`)
+- Write test case and test it while you finish each module.
+
+
+---
+
+Once you have read and understood everything, **start by generating the complete project directory layout and `CMakeLists.txt` file**, then progressively implement each module according to the specification.

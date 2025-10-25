@@ -1,0 +1,336 @@
+# MiniDB .gitignore
+
+# =============================================================================
+# 编译产物和二进制文件
+# =============================================================================
+
+# 可执行文件
+bin/
+tests/bin/
+dbserver
+dbcli
+test_*
+!test_*.cpp
+!test_*.sh
+
+# 目标文件
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+
+# 调试符号
+*.dSYM/
+*.pdb
+
+# 静态库
+*.lib
+*.la
+*.lo
+
+# =============================================================================
+# 构建系统产物
+# =============================================================================
+
+# CMake
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile.cmake
+*.cmake
+!CMakeLists.txt
+
+# Make
+.deps/
+.libs/
+
+# Autotools
+autom4te.cache/
+config.log
+config.status
+configure
+Makefile.in
+aclocal.m4
+
+# =============================================================================
+# 开发环境文件
+# =============================================================================
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Vim
+*.swp
+*.swo
+*.swn
+.vimrc.local
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# CLion
+.idea/
+cmake-build-*/
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# =============================================================================
+# 数据库相关文件
+# =============================================================================
+
+# 数据目录
+data/
+test_*_data/
+*_data/
+*.db
+*.sqlite
+*.sqlite3
+
+# 日志文件
+*.log
+minidb.log
+server.log
+client.log
+
+# 崩溃转储文件
+crash-*.dmp
+core
+core.*
+
+# 历史记录文件
+.minidb_history*
+.history
+
+# =============================================================================
+# 测试和临时文件
+# =============================================================================
+
+# 测试产物
+test_output/
+test_results/
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# 但保留重要的测试报告文档
+!TEST_REPORT.md
+
+# 临时文件
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+.#*
+
+# 调试文件
+debug_*
+!debug_*.cpp
+gdb.txt
+valgrind.log
+
+# =============================================================================
+# 文档生成文件
+# =============================================================================
+
+# Doxygen
+html/
+latex/
+man/
+rtf/
+xml/
+Doxyfile.bak
+
+# Sphinx
+_build/
+_static/
+_templates/
+
+# =============================================================================
+# 打包和分发文件
+# =============================================================================
+
+# CPack
+_CPack_Packages/
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+*.deb
+*.rpm
+*.dmg
+*.msi
+
+# 安装目录
+install/
+dist/
+release/
+
+# =============================================================================
+# 系统和运行时文件
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# =============================================================================
+# 语言特定文件
+# =============================================================================
+
+# C/C++
+*.i*86
+*.x86_64
+*.hex
+*.exe
+*.out
+*.app
+
+# Python (如果有Python工具)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node.js (如果有前端工具)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =============================================================================
+# 版本控制
+# =============================================================================
+
+# Git
+.git/
+*.orig
+*.rej
+
+# SVN
+.svn/
+
+# Mercurial
+.hg/
+
+# =============================================================================
+# 配置和密钥文件
+# =============================================================================
+
+# 配置文件
+config.local
+*.conf
+!*.conf.example
+
+# 密钥和证书
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+.env
+.env.local
+
+# =============================================================================
+# 性能分析文件
+# =============================================================================
+
+# Profiling
+*.prof
+perf.data*
+callgrind.out.*
+massif.out.*
+cachegrind.out.*
+
+# Valgrind
+vgcore.*
+*.supp
+
+# =============================================================================
+# 自定义忽略 (项目特定)
+# =============================================================================
+
+# MiniDB特定的临时文件
+manual_test
+simple_test
+debug_parser*
+debug_tokenizer*
+debug_insert*
+debug_storage*
+debug_cli*
+debug_terminal*
+debug_keyboard*
+
+# 演示和测试脚本的输出
+demo_output/
+test_temp/
+*.test_output
+
+# 备份文件
+*.cpp.bak
+*.h.bak
+*.md.bak
+
+# 编辑器临时文件
+.*.swp
+.*.swo
+*~
+
+# 本地配置
+.local/
+local_config/
+
+# 性能测试结果
+benchmark_results/
+perf_data/
