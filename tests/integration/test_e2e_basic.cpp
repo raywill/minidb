@@ -392,12 +392,166 @@ void test_column_subset_insert() {
     std::cout << "\n=== Column subset INSERT test passed! ===" << std::endl;
 }
 
+// 端到端测试：空表 SELECT
+void test_empty_table_select() {
+    std::cout << "\n=== Testing Empty Table SELECT ===\n" << std::endl;
+
+    cleanup_test_data();
+
+    Catalog catalog("./test_e2e_data");
+    assert(catalog.initialize().ok());
+
+    TableManager table_manager(&catalog);
+    QueryExecutor executor(&catalog, &table_manager);
+
+    // 1. CREATE TABLE with INT column
+    std::cout << "[Step 1] CREATE TABLE t_int (c1 INT);" << std::endl;
+    {
+        SQLParser parser("CREATE TABLE t_int (c1 INT);");
+        std::unique_ptr<StmtAST> ast;
+        assert(parser.parse(ast).ok());
+
+        Compiler compiler(&catalog);
+        std::unique_ptr<Statement> stmt;
+        assert(compiler.compile(ast.get(), stmt).ok());
+
+        Planner planner(&catalog, &table_manager);
+        std::unique_ptr<Plan> plan;
+        assert(planner.create_plan(stmt.get(), plan).ok());
+
+        QueryResult result = executor.execute_plan(plan.get());
+        std::cout << "  Execute: " << (result.success ? "OK" : result.error_message) << std::endl;
+        assert(result.success);
+    }
+
+    // 2. SELECT from empty INT table (should return empty result, not error)
+    std::cout << "\n[Step 2] SELECT * FROM t_int (empty table);" << std::endl;
+    {
+        SQLParser parser("SELECT * FROM t_int;");
+        std::unique_ptr<StmtAST> ast;
+        assert(parser.parse(ast).ok());
+
+        Compiler compiler(&catalog);
+        std::unique_ptr<Statement> stmt;
+        assert(compiler.compile(ast.get(), stmt).ok());
+
+        Planner planner(&catalog, &table_manager);
+        std::unique_ptr<Plan> plan;
+        assert(planner.create_plan(stmt.get(), plan).ok());
+
+        QueryResult result = executor.execute_plan(plan.get());
+        std::cout << "  Execute: " << (result.success ? "OK" : result.error_message) << std::endl;
+        if (result.success) {
+            std::cout << "  Result text:\n" << result.result_text << std::endl;
+        }
+        assert(result.success);  // Should succeed with empty result
+        // Verify result contains column header but no data rows
+        assert(result.result_text.find("C1") != std::string::npos);
+    }
+
+    // 3. CREATE TABLE with DECIMAL column
+    std::cout << "\n[Step 3] CREATE TABLE t_decimal (c1 DECIMAL);" << std::endl;
+    {
+        SQLParser parser("CREATE TABLE t_decimal (c1 DECIMAL);");
+        std::unique_ptr<StmtAST> ast;
+        assert(parser.parse(ast).ok());
+
+        Compiler compiler(&catalog);
+        std::unique_ptr<Statement> stmt;
+        assert(compiler.compile(ast.get(), stmt).ok());
+
+        Planner planner(&catalog, &table_manager);
+        std::unique_ptr<Plan> plan;
+        assert(planner.create_plan(stmt.get(), plan).ok());
+
+        QueryResult result = executor.execute_plan(plan.get());
+        std::cout << "  Execute: " << (result.success ? "OK" : result.error_message) << std::endl;
+        assert(result.success);
+    }
+
+    // 4. SELECT from empty DECIMAL table (should return empty result, not error)
+    std::cout << "\n[Step 4] SELECT * FROM t_decimal (empty table);" << std::endl;
+    {
+        SQLParser parser("SELECT * FROM t_decimal;");
+        std::unique_ptr<StmtAST> ast;
+        assert(parser.parse(ast).ok());
+
+        Compiler compiler(&catalog);
+        std::unique_ptr<Statement> stmt;
+        assert(compiler.compile(ast.get(), stmt).ok());
+
+        Planner planner(&catalog, &table_manager);
+        std::unique_ptr<Plan> plan;
+        assert(planner.create_plan(stmt.get(), plan).ok());
+
+        QueryResult result = executor.execute_plan(plan.get());
+        std::cout << "  Execute: " << (result.success ? "OK" : result.error_message) << std::endl;
+        if (result.success) {
+            std::cout << "  Result text:\n" << result.result_text << std::endl;
+        }
+        assert(result.success);  // Should succeed with empty result
+        // Verify result contains column header but no data rows
+        assert(result.result_text.find("C1") != std::string::npos);
+    }
+
+    // 5. CREATE TABLE with multiple columns
+    std::cout << "\n[Step 5] CREATE TABLE t_multi (id INT, name STRING, score DECIMAL);" << std::endl;
+    {
+        SQLParser parser("CREATE TABLE t_multi (id INT, name STRING, score DECIMAL);");
+        std::unique_ptr<StmtAST> ast;
+        assert(parser.parse(ast).ok());
+
+        Compiler compiler(&catalog);
+        std::unique_ptr<Statement> stmt;
+        assert(compiler.compile(ast.get(), stmt).ok());
+
+        Planner planner(&catalog, &table_manager);
+        std::unique_ptr<Plan> plan;
+        assert(planner.create_plan(stmt.get(), plan).ok());
+
+        QueryResult result = executor.execute_plan(plan.get());
+        std::cout << "  Execute: " << (result.success ? "OK" : result.error_message) << std::endl;
+        assert(result.success);
+    }
+
+    // 6. SELECT from empty multi-column table
+    std::cout << "\n[Step 6] SELECT * FROM t_multi (empty table);" << std::endl;
+    {
+        SQLParser parser("SELECT * FROM t_multi;");
+        std::unique_ptr<StmtAST> ast;
+        assert(parser.parse(ast).ok());
+
+        Compiler compiler(&catalog);
+        std::unique_ptr<Statement> stmt;
+        assert(compiler.compile(ast.get(), stmt).ok());
+
+        Planner planner(&catalog, &table_manager);
+        std::unique_ptr<Plan> plan;
+        assert(planner.create_plan(stmt.get(), plan).ok());
+
+        QueryResult result = executor.execute_plan(plan.get());
+        std::cout << "  Execute: " << (result.success ? "OK" : result.error_message) << std::endl;
+        if (result.success) {
+            std::cout << "  Result text:\n" << result.result_text << std::endl;
+        }
+        assert(result.success);  // Should succeed with empty result
+        // Verify result contains all column headers
+        assert(result.result_text.find("ID") != std::string::npos);
+        assert(result.result_text.find("NAME") != std::string::npos);
+        assert(result.result_text.find("SCORE") != std::string::npos);
+    }
+
+    cleanup_test_data();
+    std::cout << "\n=== Empty table SELECT test passed! ===" << std::endl;
+}
+
 int main() {
     try {
         test_create_insert_select();
         test_multi_row_insert();
         test_multi_column_insert();
         test_column_subset_insert();
+        test_empty_table_select();
 
         std::cout << "\n========================================" << std::endl;
         std::cout << "All E2E integration tests passed!" << std::endl;

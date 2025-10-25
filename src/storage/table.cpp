@@ -201,49 +201,69 @@ Status Table::delete_rows(const std::vector<size_t>& row_indices) {
 
 Status Table::scan_all(std::vector<ColumnVector>& columns) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     LOG_DEBUG("Table", table_name_, "Starting scan_all");
     columns.clear();
     columns.resize(schema_.column_names.size());
-    
+
     for (size_t i = 0; i < schema_.column_names.size(); ++i) {
         LOG_DEBUG("Table", table_name_, "Loading column " + std::to_string(i) + " (" + schema_.column_names[i] + ")");
         Status status = load_column_data(i, columns[i]);
         if (!status.ok()) {
             if (status.is_not_found()) {
-                // 列文件不存在，表示表为空
+                // 列文件不存在，表示表为空 - 这是正常情况
                 LOG_DEBUG("Table", table_name_, "Column file not found, table is empty");
                 columns.clear();
-                return Status::NotFound("Table is empty");
+                // 初始化空的列向量
+                columns.resize(schema_.column_names.size());
+                for (size_t j = 0; j < schema_.column_names.size(); ++j) {
+                    columns[j].name = schema_.column_names[j];
+                    columns[j].type = schema_.column_types[j];
+                    columns[j].size = 0;
+                }
+                return Status::OK(); // 空表返回OK，不是错误
             }
             LOG_ERROR("Table", table_name_, "Failed to load column " + std::to_string(i) + ": " + status.ToString());
             return status;
         }
         LOG_DEBUG("Table", table_name_, "Column " + std::to_string(i) + " loaded successfully");
     }
-    
+
     LOG_DEBUG("Table", table_name_, "scan_all completed successfully");
     return Status::OK();
 }
 
 Status Table::scan_columns(const std::vector<std::string>& column_names, std::vector<ColumnVector>& columns) const {
     std::lock_guard<std::mutex> lock(mutex_);
-    
+
     columns.clear();
     columns.resize(column_names.size());
-    
+
     for (size_t i = 0; i < column_names.size(); ++i) {
         int column_index = schema_.get_column_index(column_names[i]);
         if (column_index < 0) {
             return Status::NotFound("Column not found: " + column_names[i]);
         }
-        
+
         Status status = load_column_data(column_index, columns[i]);
         if (!status.ok()) {
+            if (status.is_not_found()) {
+                // 列文件不存在，表示表为空 - 这是正常情况
+                columns.clear();
+                // 初始化空的列向量
+                columns.resize(column_names.size());
+                for (size_t j = 0; j < column_names.size(); ++j) {
+                    int idx = schema_.get_column_index(column_names[j]);
+                    columns[j].name = column_names[j];
+                    columns[j].type = schema_.column_types[idx];
+                    columns[j].size = 0;
+                }
+                return Status::OK(); // 空表返回OK，不是错误
+            }
             return status;
         }
     }
-    
+
     return Status::OK();
 }
 
