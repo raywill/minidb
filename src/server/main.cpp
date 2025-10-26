@@ -1,5 +1,6 @@
 #include "server/database_server.h"
 #include "log/logger.h"
+#include "common/config.h"
 #include <iostream>
 #include <signal.h>
 #include <unistd.h>
@@ -21,7 +22,7 @@ void signal_handler(int signal) {
 int main(int argc, char* argv[]) {
     // 解析命令行参数
     std::string data_dir = "./data";
-    int port = 9876;
+    int port = DEFAULT_PORT;
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];

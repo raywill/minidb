@@ -1,0 +1,32 @@
+DROP TABLE if EXISTS t1; 
+Table dropped successfully
+
+
+DROP TABLE if EXISTS t2; 
+Table dropped successfully
+
+
+CREATE TABLE t1 (c1 INT); 
+Table created successfully
+
+
+CREATE TABLE t2 (c1 INT); 
+Table created successfully
+
+
+INSERT INTO t1 VALUES (1), (2), (3); 
+Rows inserted successfully
+
+
+INSERT INTO t2 VALUES (1), (2), (3), (4); 
+Rows inserted successfully
+
+
+SELECT * FROM t1 JOIN t2 ON (t1.c1 = t2.c1); 
+T1.C1 | T2.C1
+1 | 1
+2 | 2
+3 | 3
+
+
+

@@ -1,4 +1,5 @@
 #include "client/cli_client.h"
+#include "common/config.h"
 #include <iostream>
 
 using namespace minidb;
@@ -6,7 +7,7 @@ using namespace minidb;
 int main(int argc, char* argv[]) {
     // 解析命令行参数
     std::string host = "localhost";
-    int port = 9876;
+    int port = DEFAULT_PORT;
     
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];

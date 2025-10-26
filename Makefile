@@ -58,7 +58,7 @@ INTEGRATION_TEST_TARGETS = test_full_system test_e2e_basic test_join_e2e
 ALL_TEST_TARGETS = $(UNIT_TEST_TARGETS) $(INTEGRATION_TEST_TARGETS)
 
 # Default target
-all: dbserver dbcli $(UNIT_TEST_TARGETS)
+all: dbserver dbcli minitest $(UNIT_TEST_TARGETS)
 
 # Main targets
 dbserver: $(OBJECTS) src/server/main.o
@@ -66,6 +66,10 @@ dbserver: $(OBJECTS) src/server/main.o
 	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
 
 dbcli: $(OBJECTS) src/client/main.o
+	@mkdir -p bin
+	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
+
+minitest: tools/minitest/minitest.cpp
 	@mkdir -p bin
 	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
 
