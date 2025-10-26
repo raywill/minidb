@@ -136,42 +136,49 @@ Status Planner::build_select_operator_tree(SelectStatement* stmt,
             left_schema.column_names,
             table);
 
-        // 2. 处理JOIN子句（目前只支持单个JOIN）
+        // 2. 处理JOIN子句（支持多个JOIN）
         const auto& joins = stmt->get_joins();
         if (joins.empty()) {
             return Status::InvalidArgument("JOIN statement has no join clauses");
         }
 
-        // 打开右表
-        const JoinInfo& join_info = joins[0];
-        std::shared_ptr<Table> right_table;
-        Status status = table_manager_->open_table(join_info.table_name, right_table);
-        if (!status.ok()) {
-            return status;
+        // 将左表作为当前的operator
+        current_op = std::move(left_scan);
+
+        // 依次处理每个JOIN，构建嵌套的JOIN operator树
+        for (const auto& join_info : joins) {
+            // 打开JOIN表
+            std::shared_ptr<Table> join_table;
+            Status status = table_manager_->open_table(join_info.table_name, join_table);
+            if (!status.ok()) {
+                return status;
+            }
+
+            const TableSchema& join_schema = join_table->get_schema();
+
+            // 创建JOIN表的Scan算子（扫描所有列）
+            auto join_scan = make_unique<ScanOperator>(
+                join_info.table_name,
+                join_schema.column_names,
+                join_table);
+
+            // 克隆JOIN条件表达式
+            std::unique_ptr<Expression> join_condition;
+            if (join_info.condition) {
+                join_condition = join_info.condition->clone();
+            }
+
+            // 创建NestedLoopJoin算子
+            // current_op作为左子树，join_scan作为右子树
+            auto join_op = make_unique<NestedLoopJoinOperator>(
+                std::move(current_op),
+                std::move(join_scan),
+                std::move(join_condition),
+                join_info.join_type);
+
+            // 将新的JOIN算子作为当前算子，用于下一次JOIN
+            current_op = std::move(join_op);
         }
-
-        const TableSchema& right_schema = right_table->get_schema();
-
-        // 3. 创建右表的Scan算子（扫描所有列）
-        auto right_scan = make_unique<ScanOperator>(
-            join_info.table_name,
-            right_schema.column_names,
-            right_table);
-
-        // 4. 克隆JOIN条件表达式
-        std::unique_ptr<Expression> join_condition;
-        if (join_info.condition) {
-            join_condition = join_info.condition->clone();
-        }
-
-        // 5. 创建NestedLoopJoin算子
-        auto join_op = make_unique<NestedLoopJoinOperator>(
-            std::move(left_scan),
-            std::move(right_scan),
-            std::move(join_condition),
-            join_info.join_type);
-
-        current_op = std::move(join_op);
 
     } else {
         // 没有JOIN，创建普通的Scan算子
