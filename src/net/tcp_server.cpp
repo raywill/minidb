@@ -144,22 +144,27 @@ void TCPServer::stop() {
     if (!running_.load()) {
         return;
     }
-    
+
     LOG_INFO("TCPServer", "Shutdown", "Stopping TCP server");
-    
+
     running_.store(false);
-    
+
+    // 先shutdown socket，让阻塞的accept()立即返回
+    if (server_socket_ >= 0) {
+        shutdown(server_socket_, SHUT_RDWR);
+    }
+
+    // 等待接受线程结束
+    if (accept_thread_ && accept_thread_->joinable()) {
+        accept_thread_->join();
+    }
+
     // 关闭服务器socket
     if (server_socket_ >= 0) {
         close_socket(server_socket_);
         server_socket_ = -1;
     }
-    
-    // 等待接受线程结束
-    if (accept_thread_ && accept_thread_->joinable()) {
-        accept_thread_->join();
-    }
-    
+
     LOG_INFO("TCPServer", "Shutdown", "TCP server stopped");
 }
 
