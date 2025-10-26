@@ -169,21 +169,28 @@ std::unique_ptr<SelectStatement> Compiler::compile_select(SelectAST* ast) {
         if (expr_ast->get_type() == ASTType::COLUMN_REF) {
             ColumnRefAST* col_ref = static_cast<ColumnRefAST*>(expr_ast.get());
             if (col_ref->get_column_name() == "*") {
-                // SELECT * - 选择所有列
-                select_columns = schema.column_names;
+                // SELECT * - 选择所有列（使用完整限定名：表名.列名）
+                select_columns.clear();
                 select_column_indices.clear();
                 for (size_t i = 0; i < schema.get_column_count(); ++i) {
+                    // 生成完整限定名：表名.列名
+                    std::string qualified_name = table_name + "." + schema.column_names[i];
+                    select_columns.push_back(qualified_name);
                     select_column_indices.push_back(i);
                 }
                 break;
             } else {
-                // 具体列
+                // 具体列 - 验证列是否存在
                 size_t index;
                 if (!find_column_index(schema, col_ref->get_column_name(), index).ok()) {
+                    // 列不存在，在 compiler 阶段报错
+                    last_error_ = Status::NotFound(
+                        "Column '" + col_ref->get_column_name() + "' not found in table '" + table_name + "'");
                     return nullptr;
                 }
-                // 使用schema中的原始列名（保持大小写一致性）
-                select_columns.push_back(schema.column_names[index]);
+                // 使用完整限定名：表名.列名
+                std::string qualified_name = table_name + "." + schema.column_names[index];
+                select_columns.push_back(qualified_name);
                 select_column_indices.push_back(index);
             }
         }

@@ -182,9 +182,26 @@ Status Planner::build_select_operator_tree(SelectStatement* stmt,
 
     } else {
         // 没有JOIN，创建普通的Scan算子
+        // 从完整限定名中提取不带表前缀的列名
+        std::vector<std::string> unqualified_columns;
+        const std::string& table_name = stmt->get_table_name();
+        std::string table_prefix = table_name + ".";
+
+        for (const std::string& qualified_name : stmt->get_select_columns()) {
+            // 检查是否以 "表名." 开头
+            if (qualified_name.find(table_prefix) == 0) {
+                // 提取不带表前缀的列名
+                std::string col_name = qualified_name.substr(table_prefix.length());
+                unqualified_columns.push_back(col_name);
+            } else {
+                // 如果没有表前缀（不应该发生），直接使用原始名称
+                unqualified_columns.push_back(qualified_name);
+            }
+        }
+
         auto scan_op = make_unique<ScanOperator>(
             stmt->get_table_name(),
-            stmt->get_select_columns(),
+            unqualified_columns,
             table);
         current_op = std::move(scan_op);
     }
