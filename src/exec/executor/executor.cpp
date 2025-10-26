@@ -3,6 +3,7 @@
 #include "exec/operators/filter_operator.h"
 #include "exec/operators/projection_operator.h"
 #include "exec/operators/final_result_operator.h"
+#include "exec/operators/typed_expression_evaluator.h"
 #include "log/logger.h"
 #include "common/utils.h"
 #include "common/crash_handler.h"
@@ -173,17 +174,17 @@ QueryResult Executor::execute_delete(DeleteStatement* stmt) {
             chunk.add_column(col);
         }
         
-        // 使用表达式求值器
-        class ExpressionEvaluator evaluator(stmt->get_where_clause());
-        std::vector<bool> selection;
-        status = evaluator.evaluate(chunk, selection);
+        // 使用类型化表达式求值器
+        TypedExpressionEvaluator evaluator(stmt->get_where_clause());
+        std::vector<Value> results;
+        status = evaluator.evaluate(chunk, results);
         if (!status.ok()) {
             return QueryResult::error_result(status.ToString());
         }
-        
-        // 收集要删除的行索引
-        for (size_t i = 0; i < selection.size(); ++i) {
-            if (selection[i]) {
+
+        // 收集要删除的行索引（只删除WHERE条件为true的行）
+        for (size_t i = 0; i < results.size(); ++i) {
+            if (results[i].as_bool()) {
                 rows_to_delete.push_back(i);
             }
         }

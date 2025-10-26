@@ -25,15 +25,16 @@ public:
     
 private:
     std::string table_name_;
-    std::vector<std::string> columns_;
+    std::vector<std::string> columns_;  // 原始列名（不带表前缀）
+    std::vector<std::string> output_columns_;  // 完整限定名（表名.列名）
     std::shared_ptr<Table> table_;
-    
+
     // 扫描状态
     std::vector<ColumnVector> table_data_;
     size_t current_offset_;
     size_t batch_size_;
     bool data_loaded_;
-    
+
     Status load_table_data();
     Status create_chunk_from_offset(size_t offset, size_t count, DataChunk& chunk);
 };

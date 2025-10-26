@@ -1,0 +1,21 @@
+{
+  "table_name": "USERS",
+  "columns": [
+    {
+      "name": "ID",
+      "type": "INT"
+    },
+    {
+      "name": "NAME",
+      "type": "STRING"
+    },
+    {
+      "name": "AGE",
+      "type": "INT"
+    },
+    {
+      "name": "SALARY",
+      "type": "DECIMAL"
+    }
+  ]
+}

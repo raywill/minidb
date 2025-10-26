@@ -3,6 +3,7 @@
 #include "exec/operators/filter_operator.h"
 #include "exec/operators/projection_operator.h"
 #include "exec/operators/final_result_operator.h"
+#include "exec/operators/typed_expression_evaluator.h"
 #include "log/logger.h"
 #include "common/utils.h"
 #include "common/crash_handler.h"
@@ -198,15 +199,17 @@ QueryResult QueryExecutor::execute_delete(DeletePlan* plan) {
             chunk.add_column(col);
         }
 
-        class ExpressionEvaluator evaluator(plan->get_where_clause());
-        std::vector<bool> selection;
-        status = evaluator.evaluate(chunk, selection);
+        // 使用类型化表达式求值器
+        TypedExpressionEvaluator evaluator(plan->get_where_clause());
+        std::vector<Value> results;
+        status = evaluator.evaluate(chunk, results);
         if (!status.ok()) {
             return QueryResult::error_result(status.ToString());
         }
 
-        for (size_t i = 0; i < selection.size(); ++i) {
-            if (selection[i]) {
+        // 将Value结果转换为布尔选择
+        for (size_t i = 0; i < results.size(); ++i) {
+            if (results[i].as_bool()) {
                 rows_to_delete.push_back(i);
             }
         }

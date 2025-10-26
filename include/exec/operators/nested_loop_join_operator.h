@@ -45,6 +45,7 @@ private:
     // 输出列信息
     std::vector<std::string> output_columns_;
     std::vector<DataType> output_types_;
+    size_t left_column_count_;  // 左表列数，用于区分左右表列
 
     // 辅助方法
     bool evaluate_join_condition(const DataChunk& left, size_t left_idx,

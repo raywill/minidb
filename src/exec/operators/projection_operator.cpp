@@ -95,7 +95,7 @@ Status ProjectionOperator::build_projection_mapping(const std::vector<std::strin
                                                    const std::vector<DataType>& input_types) {
     column_indices_.clear();
     output_types_.clear();
-    
+
     for (const std::string& proj_col : projection_columns_) {
         // 特殊处理 * (选择所有列)
         if (proj_col == "*") {
@@ -117,16 +117,16 @@ Status ProjectionOperator::build_projection_mapping(const std::vector<std::strin
                     break;
                 }
             }
-            
+
             if (col_index < 0) {
                 return Status::NotFound("Column not found in input: " + proj_col);
             }
-            
+
             column_indices_.push_back(col_index);
             output_types_.push_back(input_types[col_index]);
         }
     }
-    
+
     return Status::OK();
 }
 

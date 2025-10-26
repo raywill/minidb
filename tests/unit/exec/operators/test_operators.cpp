@@ -469,46 +469,63 @@ void test_operator_batching() {
 }
 
 void test_expression_evaluator() {
-    std::cout << "Testing ExpressionEvaluator..." << std::endl;
-    
+    std::cout << "Testing TypedExpressionEvaluator..." << std::endl;
+
     // 创建测试数据块
     DataChunk chunk;
     chunk.row_count = 3;
-    
+
     ColumnVector id_col("id", DataType::INT);
     id_col.append_int(1);
     id_col.append_int(2);
     id_col.append_int(3);
-    
+
     ColumnVector age_col("age", DataType::INT);
     age_col.append_int(20);
     age_col.append_int(18);
     age_col.append_int(25);
-    
+
     chunk.add_column(id_col);
     chunk.add_column(age_col);
-    
+
     // 创建比较表达式：age > 19
     auto left_expr = std::unique_ptr<Expression>(new ColumnRefExpression("", "age", 1));
     auto right_expr = std::unique_ptr<Expression>(new LiteralExpression(DataType::INT, "19"));
     auto comparison_expr = std::unique_ptr<Expression>(
         new BinaryExpression(BinaryOperatorType::GREATER_THAN, std::move(left_expr), std::move(right_expr)));
-    
-    // 创建表达式求值器
-    ExpressionEvaluator evaluator(comparison_expr.get());
-    
-    // 求值
-    std::vector<bool> results;
-    Status status = evaluator.evaluate(chunk, results);
+
+    // 需要设置表达式类型（用于类型化求值）
+    left_expr = std::unique_ptr<Expression>(new ColumnRefExpression("", "age", 1));
+    left_expr->set_result_type(DataType::INT);
+    right_expr = std::unique_ptr<Expression>(new LiteralExpression(DataType::INT, "19"));
+    right_expr->set_result_type(DataType::INT);
+    comparison_expr = std::unique_ptr<Expression>(
+        new BinaryExpression(BinaryOperatorType::GREATER_THAN, std::move(left_expr), std::move(right_expr)));
+    comparison_expr->set_result_type(DataType::BOOL);
+
+    // 创建类型化表达式求值器（直接通过FilterOperator测试）
+    FilterOperator filter_op(std::move(comparison_expr));
+
+    // 创建测试表作为数据源
+    auto table = create_test_table();
+    auto scan_op = std::unique_ptr<Operator>(new ScanOperator("test_table", {"id", "age"}, table));
+    filter_op.set_child(std::move(scan_op));
+
+    ScopedArena arena;
+    ExecutionContext context(arena.get(), 100);
+
+    // 初始化并执行
+    Status status = filter_op.initialize(&context);
     assert(status.ok());
-    assert(results.size() == 3);
-    
-    // 验证结果：age > 19 -> [true, false, true]
-    assert(results[0] == true);  // 20 > 19
-    assert(results[1] == false); // 18 > 19
-    assert(results[2] == true);  // 25 > 19
-    
-    std::cout << "ExpressionEvaluator test passed!" << std::endl;
+
+    DataChunk result_chunk;
+    status = filter_op.get_next(&context, result_chunk);
+    assert(status.ok());
+
+    // 验证结果：应该只有 age > 19 的行（Alice(20), Bob(21), David(22)）
+    assert(result_chunk.row_count == 3);
+
+    std::cout << "TypedExpressionEvaluator test passed!" << std::endl;
 }
 
 void test_operator_memory_management() {

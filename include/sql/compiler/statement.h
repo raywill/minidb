@@ -19,6 +19,7 @@ enum class StatementType {
 // ============= 表达式（逻辑表达式） =============
 class Expression {
 public:
+    Expression() : result_type_(DataType::INT) {}
     virtual ~Expression() = default;
     virtual std::string to_string() const = 0;
     virtual std::unique_ptr<Expression> clone() const = 0;
@@ -28,6 +29,13 @@ public:
     virtual bool is_column_ref() const { return false; }
     virtual bool is_binary() const { return false; }
     virtual bool is_function() const { return false; }
+
+    // 类型信息（编译时确定）
+    DataType get_result_type() const { return result_type_; }
+    void set_result_type(DataType type) { result_type_ = type; }
+
+protected:
+    DataType result_type_;  // 表达式的结果类型
 };
 
 // 字面量表达式

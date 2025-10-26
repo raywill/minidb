@@ -1,0 +1,14 @@
+{
+  "tables": [
+    {
+      "name": "ORDERS",
+      "directory": "./data_test/ORDERS",
+      "row_count": 4
+    },
+    {
+      "name": "USERS",
+      "directory": "./data_test/USERS",
+      "row_count": 4
+    }
+  ]
+}

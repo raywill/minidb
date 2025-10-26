@@ -1,0 +1,9 @@
+{
+  "tables": [
+    {
+      "name": "T2",
+      "directory": "./data_test_final/T2",
+      "row_count": 4
+    }
+  ]
+}

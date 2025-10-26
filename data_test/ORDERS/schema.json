@@ -1,0 +1,17 @@
+{
+  "table_name": "ORDERS",
+  "columns": [
+    {
+      "name": "ORDER_ID",
+      "type": "INT"
+    },
+    {
+      "name": "USER_ID",
+      "type": "INT"
+    },
+    {
+      "name": "AMOUNT",
+      "type": "DECIMAL"
+    }
+  ]
+}

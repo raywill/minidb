@@ -1,5 +1,5 @@
 #include "exec/operators/nested_loop_join_operator.h"
-#include "exec/operators/filter_operator.h"
+#include "exec/operators/typed_expression_evaluator.h"
 #include "log/logger.h"
 
 namespace minidb {
@@ -40,14 +40,19 @@ Status NestedLoopJoinOperator::initialize(ExecutionContext* context) {
     }
 
     // 构建输出列信息（左表列 + 右表列）
-    output_columns_ = left_child_->get_output_columns();
+    std::vector<std::string> left_columns = left_child_->get_output_columns();
+    std::vector<std::string> right_columns = right_child_->get_output_columns();
+
+    output_columns_ = left_columns;
     output_types_ = left_child_->get_output_types();
 
-    std::vector<std::string> right_columns = right_child_->get_output_columns();
     std::vector<DataType> right_types = right_child_->get_output_types();
 
     output_columns_.insert(output_columns_.end(), right_columns.begin(), right_columns.end());
     output_types_.insert(output_types_.end(), right_types.begin(), right_types.end());
+
+    // 记录左表列数，用于区分左右表列
+    left_column_count_ = left_columns.size();
 
     // 重置状态
     left_row_index_ = 0;
@@ -222,7 +227,7 @@ bool NestedLoopJoinOperator::evaluate_join_condition(
     DataChunk merged_chunk;
     merged_chunk.row_count = 1;
 
-    // 添加左表的列
+    // 添加左表的列（列名已经是完整限定名：表名.列名）
     for (const auto& left_col : left.columns) {
         ColumnVector col(left_col.name, left_col.type);
         switch (left_col.type) {
@@ -242,7 +247,7 @@ bool NestedLoopJoinOperator::evaluate_join_condition(
         merged_chunk.add_column(col);
     }
 
-    // 添加右表的列
+    // 添加右表的列（列名已经是完整限定名：表名.列名）
     for (const auto& right_col : right.columns) {
         ColumnVector col(right_col.name, right_col.type);
         switch (right_col.type) {
@@ -262,10 +267,10 @@ bool NestedLoopJoinOperator::evaluate_join_condition(
         merged_chunk.add_column(col);
     }
 
-    // 使用ExpressionEvaluator求值
-    ExpressionEvaluator evaluator(join_condition_.get());
-    std::vector<bool> results;
-    Status status = evaluator.evaluate(merged_chunk, results);
+    // 使用TypedExpressionEvaluator求值
+    TypedExpressionEvaluator evaluator(join_condition_.get());
+    Value result;
+    Status status = evaluator.evaluate_row(merged_chunk, 0, result);
 
     if (!status.ok()) {
         LOG_ERROR("NestedLoopJoinOperator", "EvaluateJoinCondition",
@@ -273,13 +278,8 @@ bool NestedLoopJoinOperator::evaluate_join_condition(
         return false;
     }
 
-    if (results.empty()) {
-        LOG_ERROR("NestedLoopJoinOperator", "EvaluateJoinCondition",
-                 "JOIN condition returned empty results");
-        return false;
-    }
-
-    return results[0];
+    // 将Value转换为bool
+    return result.as_bool();
 }
 
 void NestedLoopJoinOperator::merge_rows(

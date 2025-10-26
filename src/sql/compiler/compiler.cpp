@@ -245,7 +245,9 @@ std::unique_ptr<Expression> Compiler::compile_expression(ExprAST* ast, const Tab
 }
 
 std::unique_ptr<LiteralExpression> Compiler::compile_literal(LiteralAST* ast) {
-    return make_unique<LiteralExpression>(ast->get_data_type(), ast->get_value());
+    auto expr = make_unique<LiteralExpression>(ast->get_data_type(), ast->get_value());
+    expr->set_result_type(ast->get_data_type());  // 字面量类型就是其自身类型
+    return expr;
 }
 
 std::unique_ptr<ColumnRefExpression> Compiler::compile_column_ref(ColumnRefAST* ast, const TableSchema& schema) {
@@ -256,7 +258,9 @@ std::unique_ptr<ColumnRefExpression> Compiler::compile_column_ref(ColumnRefAST* 
     }
 
     std::string table_name = ast->get_table_name().empty() ? schema.table_name : ast->get_table_name();
-    return make_unique<ColumnRefExpression>(table_name, ast->get_column_name(), index);
+    auto expr = make_unique<ColumnRefExpression>(table_name, ast->get_column_name(), index);
+    expr->set_result_type(schema.column_types[index]);  // 列类型从 schema 获取
+    return expr;
 }
 
 std::unique_ptr<BinaryExpression> Compiler::compile_binary_op(BinaryOpAST* ast, const TableSchema& schema) {
@@ -267,19 +271,38 @@ std::unique_ptr<BinaryExpression> Compiler::compile_binary_op(BinaryOpAST* ast, 
     if (!right) return nullptr;
 
     BinaryOperatorType op = convert_binary_op(ast->get_op());
-    return make_unique<BinaryExpression>(op, std::move(left), std::move(right));
+
+    // 类型推导
+    DataType result_type = infer_binary_result_type(
+        left->get_result_type(),
+        right->get_result_type(),
+        op
+    );
+
+    auto expr = make_unique<BinaryExpression>(op, std::move(left), std::move(right));
+    expr->set_result_type(result_type);
+    return expr;
 }
 
 std::unique_ptr<FunctionExpression> Compiler::compile_function_call(FunctionCallAST* ast, const TableSchema& schema) {
     std::vector<std::unique_ptr<Expression>> args;
+    std::vector<DataType> arg_types;
+
     for (const auto& arg_ast : ast->get_args()) {
         auto arg = compile_expression(arg_ast.get(), schema);
         if (!arg) return nullptr;
+        arg_types.push_back(arg->get_result_type());
         args.push_back(std::move(arg));
     }
 
     FunctionType func = convert_function_type(ast->get_func_type());
-    return make_unique<FunctionExpression>(func, std::move(args));
+
+    // 类型推导
+    DataType result_type = infer_function_result_type(func, arg_types);
+
+    auto expr = make_unique<FunctionExpression>(func, std::move(args));
+    expr->set_result_type(result_type);
+    return expr;
 }
 
 // ============= 辅助方法 =============
@@ -391,10 +414,12 @@ std::unique_ptr<SelectStatement> Compiler::compile_select_with_join(
         if (expr_ast->get_type() == ASTType::COLUMN_REF) {
             ColumnRefAST* col_ref = static_cast<ColumnRefAST*>(expr_ast.get());
             if (col_ref->get_column_name() == "*") {
-                // SELECT * - 选择所有表的所有列
+                // SELECT * - 选择所有表的所有列（使用完整限定名）
                 for (const auto& schema : all_schemas) {
                     for (const auto& col_name : schema.column_names) {
-                        select_columns.push_back(col_name);
+                        // 生成完整限定名：表名.列名
+                        std::string qualified_name = schema.table_name + "." + col_name;
+                        select_columns.push_back(qualified_name);
                         // 列索引需要在执行时根据表的顺序计算
                         select_column_indices.push_back(0); // Placeholder
                     }
@@ -405,7 +430,9 @@ std::unique_ptr<SelectStatement> Compiler::compile_select_with_join(
                 auto col_expr = compile_column_ref_multi_table(col_ref, all_schemas, all_aliases);
                 if (!col_expr) return nullptr;
 
-                select_columns.push_back(col_expr->get_column_name());
+                // 生成完整限定名：表名.列名
+                std::string qualified_name = col_expr->get_table_name() + "." + col_expr->get_column_name();
+                select_columns.push_back(qualified_name);
                 select_column_indices.push_back(col_expr->get_column_index());
             }
         }
@@ -479,8 +506,10 @@ std::unique_ptr<ColumnRefExpression> Compiler::compile_column_ref_multi_table(
                     last_error_ = status;
                     return nullptr;
                 }
-                return make_unique<ColumnRefExpression>(
+                auto expr = make_unique<ColumnRefExpression>(
                     schemas[i].table_name, column_name, col_index);
+                expr->set_result_type(schemas[i].column_types[col_index]);  // 设置类型
+                return expr;
             }
         }
         // 表限定符不存在
@@ -515,10 +544,12 @@ std::unique_ptr<ColumnRefExpression> Compiler::compile_column_ref_multi_table(
     }
 
     // 找到唯一的列
-    return make_unique<ColumnRefExpression>(
+    auto expr = make_unique<ColumnRefExpression>(
         schemas[found_table_idx].table_name,
         column_name,
         found_col_idx);
+    expr->set_result_type(schemas[found_table_idx].column_types[found_col_idx]);  // 设置类型
+    return expr;
 }
 
 std::unique_ptr<BinaryExpression> Compiler::compile_binary_op_multi_table(
@@ -533,7 +564,71 @@ std::unique_ptr<BinaryExpression> Compiler::compile_binary_op_multi_table(
     if (!right) return nullptr;
 
     BinaryOperatorType op = convert_binary_op(ast->get_op());
-    return make_unique<BinaryExpression>(op, std::move(left), std::move(right));
+
+    // 类型推导
+    DataType result_type = infer_binary_result_type(
+        left->get_result_type(),
+        right->get_result_type(),
+        op
+    );
+
+    auto expr = make_unique<BinaryExpression>(op, std::move(left), std::move(right));
+    expr->set_result_type(result_type);
+    return expr;
+}
+
+// ============= 类型推导 =============
+
+DataType Compiler::infer_binary_result_type(DataType left_type, DataType right_type, BinaryOperatorType op) {
+    // 比较运算符总是返回 BOOL
+    if (op >= BinaryOperatorType::EQUAL && op <= BinaryOperatorType::GREATER_EQUAL) {
+        return DataType::BOOL;
+    }
+
+    // 逻辑运算符总是返回 BOOL
+    if (op == BinaryOperatorType::AND || op == BinaryOperatorType::OR) {
+        return DataType::BOOL;
+    }
+
+    // 算术运算符：类型提升规则
+    // STRING 参与运算会被转换为数值
+    // DECIMAL 优先级高于 INT
+    // BOOL 会被转换为 INT
+
+    // 如果任一操作数是 DECIMAL，结果是 DECIMAL
+    if (left_type == DataType::DECIMAL || right_type == DataType::DECIMAL) {
+        return DataType::DECIMAL;
+    }
+
+    // 两个都是 STRING，尝试转换为 INT
+    if (left_type == DataType::STRING && right_type == DataType::STRING) {
+        return DataType::INT;
+    }
+
+    // 一个是 STRING，另一个是数值，以数值类型为准
+    if (left_type == DataType::STRING) {
+        return right_type == DataType::INT ? DataType::INT : DataType::DECIMAL;
+    }
+    if (right_type == DataType::STRING) {
+        return left_type == DataType::INT ? DataType::INT : DataType::DECIMAL;
+    }
+
+    // 其他情况返回 INT（包括 INT op INT, BOOL op INT 等）
+    return DataType::INT;
+}
+
+DataType Compiler::infer_function_result_type(FunctionType func, const std::vector<DataType>& arg_types) {
+    (void)arg_types;  // 暂时不检查参数类型
+
+    switch (func) {
+        case FunctionType::SIN:
+        case FunctionType::COS:
+            return DataType::DECIMAL;
+        case FunctionType::SUBSTR:
+            return DataType::STRING;
+        default:
+            return DataType::STRING;
+    }
 }
 
 } // namespace minidb

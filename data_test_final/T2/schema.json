@@ -1,0 +1,9 @@
+{
+  "table_name": "T2",
+  "columns": [
+    {
+      "name": "C1",
+      "type": "INT"
+    }
+  ]
+}

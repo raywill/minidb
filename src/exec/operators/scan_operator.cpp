@@ -17,13 +17,13 @@ ScanOperator::ScanOperator(const std::string& table_name,
 }
 
 Status ScanOperator::initialize(ExecutionContext* context) {
-    LOG_INFO("ScanOperator", "Query#" + std::to_string(context->query_id), 
+    LOG_INFO("ScanOperator", "Query#" + std::to_string(context->query_id),
              "Initializing scan on table: " + table_name_);
-    
+
     if (!table_) {
         return Status::InvalidArgument("Table is null");
     }
-    
+
     // 验证列是否存在
     const TableSchema& schema = table_->get_schema();
     for (const std::string& col_name : columns_) {
@@ -31,12 +31,19 @@ Status ScanOperator::initialize(ExecutionContext* context) {
             return Status::NotFound("Column not found: " + col_name);
         }
     }
-    
+
+    // 构建完整限定的输出列名（表名.列名）
+    output_columns_.clear();
+    output_columns_.reserve(columns_.size());
+    for (const std::string& col_name : columns_) {
+        output_columns_.push_back(table_name_ + "." + col_name);
+    }
+
     current_offset_ = 0;
     data_loaded_ = false;
     set_state(OperatorState::READY);
-    
-    LOG_INFO("ScanOperator", "Query#" + std::to_string(context->query_id), 
+
+    LOG_INFO("ScanOperator", "Query#" + std::to_string(context->query_id),
              "Scan operator initialized successfully");
     return Status::OK();
 }
@@ -93,7 +100,7 @@ Status ScanOperator::reset() {
 }
 
 std::vector<std::string> ScanOperator::get_output_columns() const {
-    return columns_;
+    return output_columns_;  // 返回完整限定名（表名.列名）
 }
 
 std::vector<DataType> ScanOperator::get_output_types() const {
@@ -120,11 +127,13 @@ Status ScanOperator::load_table_data() {
 Status ScanOperator::create_chunk_from_offset(size_t offset, size_t count, DataChunk& chunk) {
     chunk.clear();
     chunk.row_count = count;
-    
+
     for (size_t col_idx = 0; col_idx < table_data_.size(); ++col_idx) {
         const ColumnVector& source_col = table_data_[col_idx];
-        
-        ColumnVector chunk_col(source_col.name, source_col.type);
+
+        // 使用完整限定名：表名.列名
+        std::string qualified_name = table_name_ + "." + source_col.name;
+        ColumnVector chunk_col(qualified_name, source_col.type);
         chunk_col.size = count;
         
         // 复制数据

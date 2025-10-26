@@ -63,6 +63,10 @@ private:
 
     // 查找列索引
     Status find_column_index(const TableSchema& schema, const std::string& col_name, size_t& index);
+
+    // 类型推导
+    DataType infer_binary_result_type(DataType left_type, DataType right_type, BinaryOperatorType op);
+    DataType infer_function_result_type(FunctionType func, const std::vector<DataType>& arg_types);
 };
 
 } // namespace minidb
