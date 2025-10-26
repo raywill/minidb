@@ -6,8 +6,9 @@ MiniDB是一个从零开始实现的单节点、列存储、向量化执行的�
 
 - **列式存储**: 采用列式存储格式，优化分析型查询性能
 - **向量化执行**: 使用向量化执行引擎，批量处理数据
-- **Push模式算子**: 实现SCAN、FILTER、PROJECTION、FINAL_RESULT等算子
-- **SQL支持**: 支持CREATE TABLE、DROP TABLE、INSERT、SELECT、DELETE语句
+- **算子支持**: 实现SCAN、FILTER、PROJECTION、JOIN、FINAL_RESULT等算子
+- **SQL支持**: 支持CREATE TABLE、DROP TABLE、INSERT、SELECT、DELETE、JOIN语句
+- **JOIN操作**: 支持INNER JOIN，包括多表连接和表达式连接条件
 - **数据类型**: 支持INT、STRING、BOOL、DECIMAL数据类型
 - **内置函数**: 支持SIN、COS、SUBSTR等数学和字符串函数
 - **TCP协议**: 基于TCP的客户端-服务器架构
@@ -16,6 +17,7 @@ MiniDB是一个从零开始实现的单节点、列存储、向量化执行的�
 - **日志系统**: 多级别、线程安全的日志系统
 - **崩溃处理**: 段错误捕获、堆栈转储、错误恢复
 - **持久化**: 数据持久化到磁盘，支持服务器重启
+- **回归测试**: minitest工具，类似MySQL的mysqltest，支持自动化测试
 
 ## 📁 项目结构
 
@@ -39,7 +41,11 @@ minidb/
 │   └── client/          # 命令行客户端
 ├── include/             # 头文件
 ├── tests/               # 单元测试
+│   └── minitest/        # 回归测试用例
+│       ├── src/         # SQL测试文件
+│       └── ref/         # 参考输出文件
 ├── tools/               # 工具程序
+│   └── minitest/        # 回归测试工具
 └── data/                # 数据目录
 ```
 
@@ -64,15 +70,16 @@ make all
 # 或者分别编译
 make dbserver    # 编译服务器
 make dbcli       # 编译客户端
-make test        # 编译并运行测试
+make minitest    # 编译回归测试工具
+make test        # 编译并运行单元测试
 ```
 
 ### 编译产物
 
-- `dbserver`: 数据库服务器程序
-- `dbcli`: 命令行客户端程序
-- `test_types`: 基础类型测试
-- `test_parser`: SQL解析器测试
+- `bin/dbserver`: 数据库服务器程序
+- `bin/dbcli`: 命令行客户端程序
+- `bin/minitest`: 回归测试工具
+- `tests/bin/test_*`: 各类单元测试程序
 
 ## 🚀 使用说明
 
@@ -133,11 +140,25 @@ SELECT id, name FROM student WHERE age > 19;
 SELECT name, sin(age * 3.14 / 180) FROM student;
 SELECT substr(name, 0, 3) FROM student WHERE age >= 20;
 
+-- JOIN 操作
+CREATE TABLE departments(id INT, name STRING);
+INSERT INTO departments VALUES (1, 'CS'), (2, 'Math');
+
+CREATE TABLE employees(id INT, name STRING, dept_id INT);
+INSERT INTO employees VALUES (1, 'Alice', 1), (2, 'Bob', 1), (3, 'Charlie', 2);
+
+-- 简单 JOIN
+SELECT * FROM employees JOIN departments ON (employees.dept_id = departments.id);
+
+-- 带表达式的 JOIN
+SELECT * FROM employees e JOIN departments d ON (e.dept_id = d.id);
+
 -- 删除数据
 DELETE FROM student WHERE age < 20;
 
 -- 删除表
 DROP TABLE student;
+DROP TABLE IF EXISTS employees;
 ```
 
 ## 📊 支持的SQL语法
@@ -164,6 +185,14 @@ INSERT INTO table_name VALUES (value1, value2, ...), (value3, value4, ...);
 -- 查询数据
 SELECT column1, column2 FROM table_name;
 SELECT * FROM table_name WHERE condition;
+
+-- JOIN 查询
+SELECT * FROM table1 JOIN table2 ON (join_condition);
+SELECT * FROM t1 JOIN t2 ON (t1.id = t2.id);
+SELECT * FROM t1 JOIN t2 ON (t1.id = t2.id + 1);
+
+-- 多表 JOIN
+SELECT * FROM t1 JOIN t2 ON (t1.id = t2.id) JOIN t3 ON (t2.id = t3.id);
 
 -- 删除数据
 DELETE FROM table_name WHERE condition;
@@ -219,18 +248,90 @@ DELETE FROM table_name WHERE condition;
 
 ## 🧪 测试
 
+### 单元测试
+
 ```bash
-# 运行所有测试
+# 运行所有单元测试
 make test
 
 # 运行特定测试
-./test_types          # 基础类型测试
-./test_parser         # SQL解析器测试
-./test_crash_handler  # 崩溃处理器测试
-
-# 运行崩溃处理演示
-./demo_crash_handling.sh
+./tests/bin/test_parser_dml          # DML解析器测试
+./tests/bin/test_compiler_dml        # DML编译器测试
+./tests/bin/test_expression_eval     # 表达式求值测试
+./tests/bin/test_e2e_basic          # 端到端基础测试
 ```
+
+### 回归测试 (minitest)
+
+minitest 是类似 MySQL 的 mysqltest 的回归测试工具，用于自动化SQL测试。
+
+#### minitest 使用方法
+
+```bash
+# 启动数据库服务器
+./bin/dbserver --port 9876
+
+# 创建参考输出文件（首次运行）
+./bin/minitest --run-mode=create tests/minitest/src/basic/select.sql
+
+# 运行测试并与参考输出对比
+./bin/minitest tests/minitest/src/basic/select.sql
+
+# 使用 verbose 模式查看详细调试信息
+./bin/minitest --verbose tests/minitest/src/basic/select.sql
+
+# 指定服务器地址和端口
+./bin/minitest --host 127.0.0.1 --port 9876 tests/minitest/src/basic/select.sql
+```
+
+#### minitest 命令行选项
+
+- `--run-mode=<mode>`: 测试运行模式（create 或 compare，默认：compare）
+  - `create`: 执行SQL并创建参考输出文件（.ref）
+  - `compare`: 执行SQL并与参考输出对比
+- `--host=<host>`: 数据库服务器地址（默认：127.0.0.1）
+- `--port=<port>`: 数据库服务器端口（默认：9876）
+- `--verbose` 或 `-v`: 启用详细调试输出
+- `--help` 或 `-h`: 显示帮助信息
+
+#### 测试用例结构
+
+```
+tests/minitest/
+├── src/              # SQL测试文件
+│   ├── basic/        # 基础功能测试
+│   ├── join/         # JOIN操作测试
+│   └── ...
+└── ref/              # 参考输出文件
+    ├── basic/
+    ├── join/
+    └── ...
+```
+
+#### 编写测试用例
+
+测试用例是包含SQL语句的文本文件（.sql），每条语句以分号结尾：
+
+```sql
+-- 创建表
+CREATE TABLE test(id INT, name STRING);
+
+-- 插入数据
+INSERT INTO test VALUES (1, 'Alice'), (2, 'Bob');
+
+-- 查询数据
+SELECT * FROM test;
+
+-- 清理
+DROP TABLE test;
+```
+
+#### 测试输出
+
+- **成功**: `✓ PASS: tests/minitest/src/basic/select.sql`
+- **失败**: `✗ FAIL: tests/minitest/src/basic/select.sql`
+  - 临时输出保存在 `.tmp` 文件
+  - 使用 `diff ref_file tmp_file` 查看差异
 
 ## 📈 性能特性
 
@@ -261,13 +362,16 @@ make test
 
 ## 🛣️ 未来计划
 
+- [x] JOIN操作 (已完成)
+- [x] 回归测试工具 (已完成)
 - [ ] 查询优化器增强
 - [ ] 索引支持
 - [ ] 并发控制
 - [ ] 事务支持
-- [ ] JOIN操作
-- [ ] 聚合函数
-- [ ] 排序和分组
+- [ ] 聚合函数 (SUM, COUNT, AVG, MAX, MIN)
+- [ ] 排序和分组 (ORDER BY, GROUP BY)
+- [ ] LEFT/RIGHT JOIN 支持
+- [ ] 子查询支持
 - [ ] 插件系统
 
 ## 📝 许可证
