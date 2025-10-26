@@ -2,6 +2,7 @@
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -O2 -g
 INCLUDES = -Iinclude -Isrc
+LDLIBS = -lpthread -ldl
 
 # Source directories
 SRC_DIRS = src/common src/mem src/log src/sql/parser src/sql/ast src/sql/compiler src/sql/optimizer src/storage src/exec src/exec/operators src/exec/executor src/exec/plan src/net src/server src/client
@@ -63,144 +64,144 @@ all: dbserver dbcli minitest $(UNIT_TEST_TARGETS)
 # Main targets
 dbserver: $(OBJECTS) src/server/main.o
 	@mkdir -p bin
-	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o bin/$@ $^ $(LDLIBS)
 
 dbcli: $(OBJECTS) src/client/main.o
 	@mkdir -p bin
-	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o bin/$@ $^ $(LDLIBS)
 
 minitest: tools/minitest/minitest.cpp
 	@mkdir -p bin
-	$(CXX) $(CXXFLAGS) -o bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o bin/$@ $^ $(LDLIBS)
 
 # Common module tests
 test_types: $(OBJECTS) tests/unit/common/test_types.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_crash_handler: $(OBJECTS) tests/unit/common/test_crash_handler.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_crash_handler_extended: $(OBJECTS) tests/unit/common/test_crash_handler_extended.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Memory module tests
 test_allocator: $(OBJECTS) tests/unit/memory/test_allocator.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_arena: $(OBJECTS) tests/unit/memory/test_arena.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Log module tests
 test_logger: $(OBJECTS) tests/unit/log/test_logger.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Parser module tests
 test_parser: $(OBJECTS) tests/unit/sql/parser/test_parser.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_tokenizer: $(OBJECTS) tests/unit/sql/parser/test_tokenizer.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_parser_ddl: $(OBJECTS) tests/unit/sql/parser/test_parser_ddl.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_parser_dml: $(OBJECTS) tests/unit/sql/parser/test_parser_dml.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_parser_expressions: $(OBJECTS) tests/unit/sql/parser/test_parser_expressions.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_parser_join: $(OBJECTS) tests/unit/sql/parser/test_parser_join.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Compiler module tests
 test_compiler_ddl: $(OBJECTS) tests/unit/sql/compiler/test_compiler_ddl.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_compiler_dml: $(OBJECTS) tests/unit/sql/compiler/test_compiler_dml.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_compiler_semantic: $(OBJECTS) tests/unit/sql/compiler/test_compiler_semantic.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_expression_clone: $(OBJECTS) tests/unit/sql/compiler/test_expression_clone.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_compiler_join: $(OBJECTS) tests/unit/sql/compiler/test_compiler_join.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Optimizer module tests
 test_optimizer: $(OBJECTS) tests/unit/sql/optimizer/test_optimizer.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Storage module tests
 test_storage: $(OBJECTS) tests/unit/storage/test_storage.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_storage_simple: $(OBJECTS) tests/unit/storage/test_storage_simple.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Executor module tests
 test_executor: $(OBJECTS) tests/unit/exec/executor/test_executor.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_expression_eval: $(OBJECTS) tests/unit/exec/executor/test_expression_eval.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Operator module tests
 test_operators: $(OBJECTS) tests/unit/exec/operators/test_operators.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Planner module tests
 test_planner_ddl: $(OBJECTS) tests/unit/exec/plan/test_planner_ddl.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_planner_dml: $(OBJECTS) tests/unit/exec/plan/test_planner_dml.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Network module tests
 test_network: $(OBJECTS) tests/unit/net/test_network.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 test_network_simple: $(OBJECTS) tests/unit/net/test_network_simple.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Client module tests
 test_command_history: $(OBJECTS) tests/unit/client/test_command_history.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Integration test targets
 test_full_system: $(OBJECTS) tests/integration/test_full_system.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # Object file compilation
 %.o: %.cpp
@@ -245,12 +246,12 @@ rebuild: clean all
 # E2E test
 test_e2e_basic: $(OBJECTS) tests/integration/test_e2e_basic.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 
 # JOIN E2E test
 test_join_e2e: $(OBJECTS) tests/integration/test_join_e2e.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
 test_arithmetic_join: $(OBJECTS) tests/integration/test_arithmetic_join.o
 	@mkdir -p tests/bin
-	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ $(LDLIBS)
