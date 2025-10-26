@@ -16,9 +16,10 @@ MEMORY_TEST_SOURCES = tests/unit/memory/test_allocator.cpp tests/unit/memory/tes
 LOG_TEST_SOURCES = tests/unit/log/test_logger.cpp
 PARSER_TEST_SOURCES = tests/unit/sql/parser/test_parser.cpp tests/unit/sql/parser/test_tokenizer.cpp \
                       tests/unit/sql/parser/test_parser_ddl.cpp tests/unit/sql/parser/test_parser_dml.cpp \
-                      tests/unit/sql/parser/test_parser_expressions.cpp
+                      tests/unit/sql/parser/test_parser_expressions.cpp tests/unit/sql/parser/test_parser_join.cpp
 COMPILER_TEST_SOURCES = tests/unit/sql/compiler/test_compiler_ddl.cpp tests/unit/sql/compiler/test_compiler_dml.cpp \
-                        tests/unit/sql/compiler/test_compiler_semantic.cpp tests/unit/sql/compiler/test_expression_clone.cpp
+                        tests/unit/sql/compiler/test_compiler_semantic.cpp tests/unit/sql/compiler/test_expression_clone.cpp \
+                        tests/unit/sql/compiler/test_compiler_join.cpp
 OPTIMIZER_TEST_SOURCES = tests/unit/sql/optimizer/test_optimizer.cpp
 STORAGE_TEST_SOURCES = tests/unit/storage/test_storage.cpp tests/unit/storage/test_storage_simple.cpp
 EXECUTOR_TEST_SOURCES = tests/unit/exec/executor/test_executor.cpp tests/unit/exec/executor/test_expression_eval.cpp
@@ -31,7 +32,7 @@ UNIT_TEST_SOURCES = $(COMMON_TEST_SOURCES) $(MEMORY_TEST_SOURCES) $(LOG_TEST_SOU
                     $(COMPILER_TEST_SOURCES) $(OPTIMIZER_TEST_SOURCES) $(STORAGE_TEST_SOURCES) \
                     $(EXECUTOR_TEST_SOURCES) $(OPERATOR_TEST_SOURCES) $(PLANNER_TEST_SOURCES) \
                     $(NETWORK_TEST_SOURCES) $(CLIENT_TEST_SOURCES)
-INTEGRATION_TEST_SOURCES = tests/integration/test_full_system.cpp tests/integration/test_e2e_basic.cpp
+INTEGRATION_TEST_SOURCES = tests/integration/test_full_system.cpp tests/integration/test_e2e_basic.cpp tests/integration/test_join_e2e.cpp
 TEST_SOURCES = $(UNIT_TEST_SOURCES) $(INTEGRATION_TEST_SOURCES)
 TEST_OBJECTS = $(TEST_SOURCES:.cpp=.o)
 
@@ -39,8 +40,8 @@ TEST_OBJECTS = $(TEST_SOURCES:.cpp=.o)
 COMMON_TEST_TARGETS = test_types test_crash_handler test_crash_handler_extended
 MEMORY_TEST_TARGETS = test_allocator test_arena
 LOG_TEST_TARGETS = test_logger
-PARSER_TEST_TARGETS = test_parser test_tokenizer test_parser_ddl test_parser_dml test_parser_expressions
-COMPILER_TEST_TARGETS = test_compiler_ddl test_compiler_dml test_compiler_semantic test_expression_clone
+PARSER_TEST_TARGETS = test_parser test_tokenizer test_parser_ddl test_parser_dml test_parser_expressions test_parser_join
+COMPILER_TEST_TARGETS = test_compiler_ddl test_compiler_dml test_compiler_semantic test_expression_clone test_compiler_join
 OPTIMIZER_TEST_TARGETS = test_optimizer
 STORAGE_TEST_TARGETS = test_storage test_storage_simple
 EXECUTOR_TEST_TARGETS = test_executor test_expression_eval
@@ -53,7 +54,7 @@ UNIT_TEST_TARGETS = $(COMMON_TEST_TARGETS) $(MEMORY_TEST_TARGETS) $(LOG_TEST_TAR
                     $(COMPILER_TEST_TARGETS) $(OPTIMIZER_TEST_TARGETS) $(STORAGE_TEST_TARGETS) \
                     $(EXECUTOR_TEST_TARGETS) $(OPERATOR_TEST_TARGETS) $(PLANNER_TEST_TARGETS) \
                     $(NETWORK_TEST_TARGETS) $(CLIENT_TEST_TARGETS)
-INTEGRATION_TEST_TARGETS = test_full_system test_e2e_basic
+INTEGRATION_TEST_TARGETS = test_full_system test_e2e_basic test_join_e2e
 ALL_TEST_TARGETS = $(UNIT_TEST_TARGETS) $(INTEGRATION_TEST_TARGETS)
 
 # Default target
@@ -116,6 +117,10 @@ test_parser_expressions: $(OBJECTS) tests/unit/sql/parser/test_parser_expression
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
+test_parser_join: $(OBJECTS) tests/unit/sql/parser/test_parser_join.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
 # Compiler module tests
 test_compiler_ddl: $(OBJECTS) tests/unit/sql/compiler/test_compiler_ddl.o
 	@mkdir -p tests/bin
@@ -130,6 +135,10 @@ test_compiler_semantic: $(OBJECTS) tests/unit/sql/compiler/test_compiler_semanti
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
 test_expression_clone: $(OBJECTS) tests/unit/sql/compiler/test_expression_clone.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+test_compiler_join: $(OBJECTS) tests/unit/sql/compiler/test_compiler_join.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
 
@@ -231,5 +240,10 @@ rebuild: clean all
 .PHONY: all clean test test_unit test_integration rebuild
 # E2E test
 test_e2e_basic: $(OBJECTS) tests/integration/test_e2e_basic.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+
+# JOIN E2E test
+test_join_e2e: $(OBJECTS) tests/integration/test_join_e2e.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread

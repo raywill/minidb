@@ -3,6 +3,7 @@
 #include "exec/operators/filter_operator.h"
 #include "exec/operators/projection_operator.h"
 #include "exec/operators/final_result_operator.h"
+#include "exec/operators/nested_loop_join_operator.h"
 #include "common/utils.h"
 
 namespace minidb {
@@ -86,7 +87,7 @@ std::unique_ptr<InsertPlan> Planner::plan_insert(InsertStatement* stmt) {
 }
 
 std::unique_ptr<SelectPlan> Planner::plan_select(SelectStatement* stmt) {
-    // 打开表
+    // 打开主表
     std::shared_ptr<Table> table;
     Status status = table_manager_->open_table(stmt->get_table_name(), table);
     if (!status.ok()) {
@@ -122,27 +123,83 @@ std::unique_ptr<DeletePlan> Planner::plan_delete(DeleteStatement* stmt) {
 Status Planner::build_select_operator_tree(SelectStatement* stmt,
                                            std::shared_ptr<Table> table,
                                            std::unique_ptr<Operator>& root_op) {
-    const TableSchema& schema = table->get_schema();
+    std::unique_ptr<Operator> current_op;
 
-    // 1. 创建Scan算子
-    auto scan_op = make_unique<ScanOperator>(stmt->get_table_name(), stmt->get_select_columns(), table);
-    std::unique_ptr<Operator> current_op = std::move(scan_op);
+    // 检查是否有JOIN
+    if (stmt->has_joins()) {
+        // 构建JOIN的Operator树
+        const TableSchema& left_schema = table->get_schema();
 
-    // 2. 如果有WHERE子句，添加Filter算子
+        // 1. 创建左表的Scan算子（扫描所有列）
+        auto left_scan = make_unique<ScanOperator>(
+            stmt->get_table_name(),
+            left_schema.column_names,
+            table);
+
+        // 2. 处理JOIN子句（目前只支持单个JOIN）
+        const auto& joins = stmt->get_joins();
+        if (joins.empty()) {
+            return Status::InvalidArgument("JOIN statement has no join clauses");
+        }
+
+        // 打开右表
+        const JoinInfo& join_info = joins[0];
+        std::shared_ptr<Table> right_table;
+        Status status = table_manager_->open_table(join_info.table_name, right_table);
+        if (!status.ok()) {
+            return status;
+        }
+
+        const TableSchema& right_schema = right_table->get_schema();
+
+        // 3. 创建右表的Scan算子（扫描所有列）
+        auto right_scan = make_unique<ScanOperator>(
+            join_info.table_name,
+            right_schema.column_names,
+            right_table);
+
+        // 4. 克隆JOIN条件表达式
+        std::unique_ptr<Expression> join_condition;
+        if (join_info.condition) {
+            join_condition = join_info.condition->clone();
+        }
+
+        // 5. 创建NestedLoopJoin算子
+        auto join_op = make_unique<NestedLoopJoinOperator>(
+            std::move(left_scan),
+            std::move(right_scan),
+            std::move(join_condition),
+            join_info.join_type);
+
+        current_op = std::move(join_op);
+
+    } else {
+        // 没有JOIN，创建普通的Scan算子
+        auto scan_op = make_unique<ScanOperator>(
+            stmt->get_table_name(),
+            stmt->get_select_columns(),
+            table);
+        current_op = std::move(scan_op);
+    }
+
+    // 6. 如果有WHERE子句，添加Filter算子
     if (stmt->get_where_clause()) {
-        auto filter_op = std::unique_ptr<FilterOperator>(new FilterOperator(stmt->get_where_clause()));
+        // 克隆WHERE表达式
+        auto where_expr = stmt->get_where_clause()->clone();
+        auto filter_op = make_unique<FilterOperator>(std::move(where_expr));
         filter_op->set_child(std::move(current_op));
         current_op = std::move(filter_op);
     }
 
-    // 3. 添加Projection算子
-    if (!stmt->get_select_columns().empty()) {
+    // 7. 添加Projection算子（如果需要投影特定列）
+    if (!stmt->get_select_columns().empty() && stmt->has_joins()) {
+        // JOIN查询需要投影到指定列
         auto proj_op = make_unique<ProjectionOperator>(stmt->get_select_columns());
         proj_op->set_child(std::move(current_op));
         current_op = std::move(proj_op);
     }
 
-    // 4. 添加最终结果算子
+    // 8. 添加最终结果算子
     auto final_op = make_unique<FinalResultOperator>();
     final_op->set_child(std::move(current_op));
 

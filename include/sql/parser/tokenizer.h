@@ -33,6 +33,16 @@ enum class TokenType {
     EXISTS,
     AND,
     OR,
+
+    // JOIN 关键字
+    JOIN,
+    INNER,
+    LEFT,
+    RIGHT,
+    FULL,
+    OUTER,
+    ON,
+    AS,
     
     // 数据类型
     INT,

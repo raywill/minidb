@@ -26,7 +26,8 @@ enum class ASTType {
     TABLE_REF,
     COLUMN_DEF,
     WHERE_CLAUSE,
-    ORDER_BY_CLAUSE
+    ORDER_BY_CLAUSE,
+    JOIN_CLAUSE
 };
 
 // 二元操作符
@@ -146,14 +147,23 @@ private:
 // 表引用
 class TableRefAST : public ASTNode {
 public:
-    explicit TableRefAST(const std::string& name)
-        : ASTNode(ASTType::TABLE_REF), table_name_(name) {}
+    explicit TableRefAST(const std::string& name, const std::string& alias = "")
+        : ASTNode(ASTType::TABLE_REF), table_name_(name), alias_(alias) {}
 
     const std::string& get_table_name() const { return table_name_; }
+    const std::string& get_alias() const { return alias_; }
+    bool has_alias() const { return !alias_.empty(); }
+
+    // 返回实际引用名（别名优先）
+    const std::string& get_reference_name() const {
+        return alias_.empty() ? table_name_ : alias_;
+    }
+
     std::string to_string() const override;
 
 private:
     std::string table_name_;
+    std::string alias_;  // 表别名
 };
 
 // ============= 语句节点 =============
@@ -217,9 +227,32 @@ private:
     std::vector<std::vector<std::unique_ptr<ExprAST>>> values_;
 };
 
+// JOIN子句
+class JoinClauseAST : public ASTNode {
+public:
+    JoinClauseAST(JoinType type,
+                  std::unique_ptr<TableRefAST> right_table,
+                  std::unique_ptr<ExprAST> condition)
+        : ASTNode(ASTType::JOIN_CLAUSE),
+          join_type_(type),
+          right_table_(std::move(right_table)),
+          condition_(std::move(condition)) {}
+
+    JoinType get_join_type() const { return join_type_; }
+    TableRefAST* get_right_table() const { return right_table_.get(); }
+    ExprAST* get_condition() const { return condition_.get(); }
+    std::string to_string() const override;
+
+private:
+    JoinType join_type_;
+    std::unique_ptr<TableRefAST> right_table_;
+    std::unique_ptr<ExprAST> condition_;
+};
+
 // SELECT
 class SelectAST : public StmtAST {
 public:
+    // Constructor for backward compatibility (without JOINs)
     SelectAST(std::vector<std::unique_ptr<ExprAST>> select_list,
               std::unique_ptr<TableRefAST> from,
               std::unique_ptr<ExprAST> where = nullptr)
@@ -228,14 +261,27 @@ public:
           from_table_(std::move(from)),
           where_clause_(std::move(where)) {}
 
+    // Constructor with JOINs support
+    SelectAST(std::vector<std::unique_ptr<ExprAST>> select_list,
+              std::unique_ptr<TableRefAST> from,
+              std::vector<std::unique_ptr<JoinClauseAST>> joins,
+              std::unique_ptr<ExprAST> where)
+        : StmtAST(ASTType::SELECT),
+          select_list_(std::move(select_list)),
+          from_table_(std::move(from)),
+          join_clauses_(std::move(joins)),
+          where_clause_(std::move(where)) {}
+
     const std::vector<std::unique_ptr<ExprAST>>& get_select_list() const { return select_list_; }
     TableRefAST* get_from_table() const { return from_table_.get(); }
+    const std::vector<std::unique_ptr<JoinClauseAST>>& get_joins() const { return join_clauses_; }
     ExprAST* get_where_clause() const { return where_clause_.get(); }
     std::string to_string() const override;
 
 private:
     std::vector<std::unique_ptr<ExprAST>> select_list_;
     std::unique_ptr<TableRefAST> from_table_;
+    std::vector<std::unique_ptr<JoinClauseAST>> join_clauses_;  // 新增：JOIN子句列表
     std::unique_ptr<ExprAST> where_clause_;
 };
 

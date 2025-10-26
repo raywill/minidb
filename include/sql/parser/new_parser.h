@@ -55,6 +55,10 @@ private:
     std::vector<std::unique_ptr<ExprAST>> parse_expression_list();
     std::vector<std::string> parse_identifier_list();
 
+    // JOIN parsing
+    JoinType parse_join_type();
+    std::unique_ptr<JoinClauseAST> parse_join_clause();
+
     // 数据类型解析
     DataType parse_data_type();
 

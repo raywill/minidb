@@ -67,6 +67,9 @@ std::string ColumnDefAST::to_string() const {
 
 // ============= TableRefAST =============
 std::string TableRefAST::to_string() const {
+    if (!alias_.empty()) {
+        return table_name_ + " AS " + alias_;
+    }
     return table_name_;
 }
 
@@ -115,6 +118,35 @@ std::string InsertAST::to_string() const {
     return result;
 }
 
+// ============= JoinClauseAST =============
+std::string JoinClauseAST::to_string() const {
+    std::string result;
+
+    // Join type
+    switch (join_type_) {
+        case JoinType::INNER:
+            result = "INNER JOIN ";
+            break;
+        case JoinType::LEFT_OUTER:
+            result = "LEFT OUTER JOIN ";
+            break;
+        case JoinType::RIGHT_OUTER:
+            result = "RIGHT OUTER JOIN ";
+            break;
+        case JoinType::FULL_OUTER:
+            result = "FULL OUTER JOIN ";
+            break;
+    }
+
+    // Right table
+    result += right_table_->to_string();
+
+    // ON condition
+    result += " ON " + condition_->to_string();
+
+    return result;
+}
+
 // ============= SelectAST =============
 std::string SelectAST::to_string() const {
     std::string result = "SELECT ";
@@ -124,6 +156,10 @@ std::string SelectAST::to_string() const {
     }
     if (from_table_) {
         result += " FROM " + from_table_->to_string();
+    }
+    // JOIN clauses
+    for (const auto& join : join_clauses_) {
+        result += " " + join->to_string();
     }
     if (where_clause_) {
         result += " WHERE " + where_clause_->to_string();

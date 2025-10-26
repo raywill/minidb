@@ -7,9 +7,11 @@ namespace minidb {
 
 // 静态成员初始化
 std::unordered_set<std::string> Tokenizer::keywords_ = {
-    "CREATE", "DROP", "TABLE", "INSERT", "INTO", "VALUES", 
-    "SELECT", "FROM", "WHERE", "DELETE", "IF", "NOT", "EXISTS", 
-    "AND", "OR", "TRUE", "FALSE"
+    "CREATE", "DROP", "TABLE", "INSERT", "INTO", "VALUES",
+    "SELECT", "FROM", "WHERE", "DELETE", "IF", "NOT", "EXISTS",
+    "AND", "OR", "TRUE", "FALSE",
+    // JOIN 关键字
+    "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "ON", "AS"
 };
 
 std::unordered_set<std::string> Tokenizer::data_types_ = {
@@ -287,6 +289,15 @@ TokenType Tokenizer::get_keyword_type(const std::string& word) const {
         if (word == "AND") return TokenType::AND;
         if (word == "OR") return TokenType::OR;
         if (word == "TRUE" || word == "FALSE") return TokenType::BOOLEAN;
+        // JOIN 关键字
+        if (word == "JOIN") return TokenType::JOIN;
+        if (word == "INNER") return TokenType::INNER;
+        if (word == "LEFT") return TokenType::LEFT;
+        if (word == "RIGHT") return TokenType::RIGHT;
+        if (word == "FULL") return TokenType::FULL;
+        if (word == "OUTER") return TokenType::OUTER;
+        if (word == "ON") return TokenType::ON;
+        if (word == "AS") return TokenType::AS;
     }
     
     if (data_types_.count(word)) {
@@ -339,6 +350,14 @@ std::string TokenTypeToString(TokenType type) {
         case TokenType::EXISTS: return "EXISTS";
         case TokenType::AND: return "AND";
         case TokenType::OR: return "OR";
+        case TokenType::JOIN: return "JOIN";
+        case TokenType::INNER: return "INNER";
+        case TokenType::LEFT: return "LEFT";
+        case TokenType::RIGHT: return "RIGHT";
+        case TokenType::FULL: return "FULL";
+        case TokenType::OUTER: return "OUTER";
+        case TokenType::ON: return "ON";
+        case TokenType::AS: return "AS";
         case TokenType::INT: return "INT";
         case TokenType::STRING_TYPE: return "STRING_TYPE";
         case TokenType::BOOL: return "BOOL";

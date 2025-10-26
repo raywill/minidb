@@ -28,6 +28,13 @@ private:
     std::unique_ptr<SelectStatement> compile_select(SelectAST* ast);
     std::unique_ptr<DeleteStatement> compile_delete(DeleteAST* ast);
 
+    // JOIN编译
+    std::unique_ptr<SelectStatement> compile_select_with_join(
+        SelectAST* ast,
+        const std::string& from_table_name,
+        const std::string& from_table_alias,
+        const TableSchema& from_schema);
+
     // 编译表达式
     std::unique_ptr<Expression> compile_expression(ExprAST* ast, const TableSchema& schema);
     std::unique_ptr<LiteralExpression> compile_literal(LiteralAST* ast);
@@ -35,9 +42,24 @@ private:
     std::unique_ptr<BinaryExpression> compile_binary_op(BinaryOpAST* ast, const TableSchema& schema);
     std::unique_ptr<FunctionExpression> compile_function_call(FunctionCallAST* ast, const TableSchema& schema);
 
+    // JOIN表达式编译（支持多表上下文）
+    std::unique_ptr<Expression> compile_expression_multi_table(
+        ExprAST* ast,
+        const std::vector<TableSchema>& schemas,
+        const std::vector<std::string>& aliases);
+    std::unique_ptr<ColumnRefExpression> compile_column_ref_multi_table(
+        ColumnRefAST* ast,
+        const std::vector<TableSchema>& schemas,
+        const std::vector<std::string>& aliases);
+    std::unique_ptr<BinaryExpression> compile_binary_op_multi_table(
+        BinaryOpAST* ast,
+        const std::vector<TableSchema>& schemas,
+        const std::vector<std::string>& aliases);
+
     // 辅助方法
     BinaryOperatorType convert_binary_op(BinaryOp op);
     FunctionType convert_function_type(FuncType func);
+    JoinType convert_join_type(JoinType ast_join_type);
 
     // 查找列索引
     Status find_column_index(const TableSchema& schema, const std::string& col_name, size_t& index);

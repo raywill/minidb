@@ -85,11 +85,98 @@ void test_tokenizer_whitespace_handling() {
     std::cout << "Tokenizer whitespace handling test passed!" << std::endl;
 }
 
+void test_tokenizer_join_keywords() {
+    std::cout << "Testing Tokenizer JOIN keywords..." << std::endl;
+
+    // Test simple INNER JOIN
+    {
+        std::string sql = "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id;";
+        Tokenizer tokenizer(sql);
+        auto tokens = tokenizer.tokenize_all();
+
+        bool found_join = false;
+        bool found_on = false;
+
+        for (const auto& token : tokens) {
+            if (token.type == TokenType::JOIN) {
+                found_join = true;
+                assert(token.value == "JOIN");
+            }
+            if (token.type == TokenType::ON) {
+                found_on = true;
+                assert(token.value == "ON");
+            }
+        }
+
+        assert(found_join && "JOIN keyword not found");
+        assert(found_on && "ON keyword not found");
+    }
+
+    // Test INNER JOIN
+    {
+        std::string sql = "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id;";
+        Tokenizer tokenizer(sql);
+        auto tokens = tokenizer.tokenize_all();
+
+        bool found_inner = false;
+        bool found_join = false;
+
+        for (const auto& token : tokens) {
+            if (token.type == TokenType::INNER) {
+                found_inner = true;
+                assert(token.value == "INNER");
+            }
+            if (token.type == TokenType::JOIN) found_join = true;
+        }
+
+        assert(found_inner && "INNER keyword not found");
+        assert(found_join && "JOIN keyword not found");
+    }
+
+    // Test LEFT/RIGHT/FULL OUTER JOIN keywords
+    {
+        std::string sql = "LEFT RIGHT FULL OUTER";
+        Tokenizer tokenizer(sql);
+        auto tokens = tokenizer.tokenize_all();
+
+        assert(tokens.size() == 4);
+        assert(tokens[0].type == TokenType::LEFT);
+        assert(tokens[0].value == "LEFT");
+        assert(tokens[1].type == TokenType::RIGHT);
+        assert(tokens[1].value == "RIGHT");
+        assert(tokens[2].type == TokenType::FULL);
+        assert(tokens[2].value == "FULL");
+        assert(tokens[3].type == TokenType::OUTER);
+        assert(tokens[3].value == "OUTER");
+    }
+
+    // Test AS keyword for table aliases
+    {
+        std::string sql = "SELECT u.name FROM users AS u;";
+        Tokenizer tokenizer(sql);
+        auto tokens = tokenizer.tokenize_all();
+
+        bool found_as = false;
+
+        for (const auto& token : tokens) {
+            if (token.type == TokenType::AS) {
+                found_as = true;
+                assert(token.value == "AS");
+            }
+        }
+
+        assert(found_as && "AS keyword not found");
+    }
+
+    std::cout << "Tokenizer JOIN keywords test passed!" << std::endl;
+}
+
 int main() {
     try {
         test_tokenizer_comprehensive();
         test_tokenizer_edge_cases();
         test_tokenizer_whitespace_handling();
+        test_tokenizer_join_keywords();
 
         std::cout << "\nAll tokenizer tests passed!" << std::endl;
         return 0;

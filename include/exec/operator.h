@@ -13,7 +13,9 @@ enum class OperatorType {
     SCAN,
     FILTER,
     PROJECTION,
-    FINAL_RESULT
+    FINAL_RESULT,
+    NESTED_LOOP_JOIN,
+    HASH_JOIN
 };
 
 // 算子状态枚举

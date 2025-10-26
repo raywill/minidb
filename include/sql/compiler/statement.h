@@ -199,8 +199,25 @@ private:
 };
 
 // ============= SELECT Statement =============
+
+// JOIN信息结构
+struct JoinInfo {
+    std::string table_name;          // JOIN的表名
+    std::string table_alias;         // 表别名
+    JoinType join_type;              // JOIN类型
+    std::unique_ptr<Expression> condition;  // JOIN条件
+    std::vector<std::string> column_names;  // 表的列名列表
+    std::vector<DataType> column_types;     // 表的列类型列表
+
+    JoinInfo(const std::string& name, const std::string& alias, JoinType type,
+             std::unique_ptr<Expression> cond)
+        : table_name(name), table_alias(alias), join_type(type),
+          condition(std::move(cond)) {}
+};
+
 class SelectStatement : public Statement {
 public:
+    // 原有的构造函数（向后兼容，用于单表查询）
     SelectStatement(const std::string& table_name,
                    std::vector<std::string> select_columns,
                    std::vector<size_t> select_column_indices,
@@ -211,14 +228,44 @@ public:
           select_column_indices_(std::move(select_column_indices)),
           where_clause_(std::move(where_clause)) {}
 
+    // 新构造函数（支持JOIN）
+    SelectStatement(const std::string& table_name,
+                   const std::string& table_alias,
+                   std::vector<JoinInfo> joins,
+                   std::vector<std::string> select_columns,
+                   std::vector<size_t> select_column_indices,
+                   std::unique_ptr<Expression> where_clause = nullptr)
+        : Statement(StatementType::SELECT),
+          table_name_(table_name),
+          table_alias_(table_alias),
+          joins_(std::move(joins)),
+          select_columns_(std::move(select_columns)),
+          select_column_indices_(std::move(select_column_indices)),
+          where_clause_(std::move(where_clause)) {}
+
     const std::string& get_table_name() const { return table_name_; }
+    const std::string& get_table_alias() const { return table_alias_; }
+    const std::vector<JoinInfo>& get_joins() const { return joins_; }
+    bool has_joins() const { return !joins_.empty(); }
     const std::vector<std::string>& get_select_columns() const { return select_columns_; }
     const std::vector<size_t>& get_select_column_indices() const { return select_column_indices_; }
     Expression* get_where_clause() const { return where_clause_.get(); }
     std::string to_string() const override;
 
+    // 获取所有涉及的表（包括FROM表和JOIN表）
+    std::vector<std::string> get_all_tables() const {
+        std::vector<std::string> tables;
+        tables.push_back(table_name_);
+        for (const auto& join : joins_) {
+            tables.push_back(join.table_name);
+        }
+        return tables;
+    }
+
 private:
-    std::string table_name_;
+    std::string table_name_;                    // FROM表名
+    std::string table_alias_;                   // FROM表别名
+    std::vector<JoinInfo> joins_;               // JOIN子句列表
     std::vector<std::string> select_columns_;
     std::vector<size_t> select_column_indices_;  // 编译后的列索引
     std::unique_ptr<Expression> where_clause_;

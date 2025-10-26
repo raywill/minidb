@@ -115,7 +115,26 @@ std::string InsertStatement::to_string() const {
 
 // ============= SelectStatement =============
 std::string SelectStatement::to_string() const {
-    std::string result = "Select(table=" + table_name_ + ", columns=[";
+    std::string result = "Select(table=" + table_name_;
+    if (!table_alias_.empty()) {
+        result += " AS " + table_alias_;
+    }
+
+    // JOIN clauses
+    if (!joins_.empty()) {
+        result += ", joins=[";
+        for (size_t i = 0; i < joins_.size(); ++i) {
+            if (i > 0) result += ", ";
+            result += joins_[i].table_name;
+            if (!joins_[i].table_alias.empty()) {
+                result += " AS " + joins_[i].table_alias;
+            }
+            result += " ON " + joins_[i].condition->to_string();
+        }
+        result += "]";
+    }
+
+    result += ", columns=[";
     for (size_t i = 0; i < select_columns_.size(); ++i) {
         if (i > 0) result += ", ";
         result += select_columns_[i] + "[" + std::to_string(select_column_indices_[i]) + "]";

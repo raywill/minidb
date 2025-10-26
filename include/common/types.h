@@ -14,6 +14,14 @@ enum class DataType {
     DECIMAL
 };
 
+// JOIN类型枚举
+enum class JoinType {
+    INNER,
+    LEFT_OUTER,
+    RIGHT_OUTER,
+    FULL_OUTER
+};
+
 // 将数据类型转换为字符串
 std::string DataTypeToString(DataType type);
 

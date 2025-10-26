@@ -144,6 +144,8 @@ std::unique_ptr<SelectStatement> Compiler::compile_select(SelectAST* ast) {
         return nullptr; // 需要FROM子句
     }
     std::string table_name = ast->get_from_table()->get_table_name();
+    std::string table_alias = ast->get_from_table()->has_alias() ?
+                               ast->get_from_table()->get_alias() : "";
 
     // 获取表模式
     TableMetadata metadata;
@@ -154,7 +156,12 @@ std::unique_ptr<SelectStatement> Compiler::compile_select(SelectAST* ast) {
     }
     const TableSchema& schema = metadata.schema;
 
-    // 解析选择列
+    // Check if this is a JOIN query
+    if (!ast->get_joins().empty()) {
+        return compile_select_with_join(ast, table_name, table_alias, schema);
+    }
+
+    // 解析选择列（单表查询）
     std::vector<std::string> select_columns;
     std::vector<size_t> select_column_indices;
 
@@ -314,6 +321,219 @@ Status Compiler::find_column_index(const TableSchema& schema, const std::string&
         }
     }
     return Status::NotFound("Column '" + col_name + "' not found in table '" + schema.table_name + "'");
+}
+
+// ============= JOIN编译 =============
+JoinType Compiler::convert_join_type(JoinType ast_join_type) {
+    // Since JoinType is now shared between AST and Statement, no conversion needed
+    return ast_join_type;
+}
+
+std::unique_ptr<SelectStatement> Compiler::compile_select_with_join(
+    SelectAST* ast,
+    const std::string& from_table_name,
+    const std::string& from_table_alias,
+    const TableSchema& from_schema) {
+
+    // 收集所有表的schema和alias
+    std::vector<TableSchema> all_schemas;
+    std::vector<std::string> all_aliases;
+
+    // 添加FROM表
+    all_schemas.push_back(from_schema);
+    all_aliases.push_back(from_table_alias.empty() ? from_table_name : from_table_alias);
+
+    // 编译JOIN子句
+    std::vector<JoinInfo> join_infos;
+    for (const auto& join_ast : ast->get_joins()) {
+        // 获取JOIN表的schema
+        std::string join_table_name = join_ast->get_right_table()->get_table_name();
+        std::string join_table_alias = join_ast->get_right_table()->has_alias() ?
+                                       join_ast->get_right_table()->get_alias() : "";
+
+        TableMetadata join_metadata;
+        Status status = catalog_->get_table_metadata(join_table_name, join_metadata);
+        if (!status.ok()) {
+            last_error_ = status;
+            return nullptr;
+        }
+        const TableSchema& join_schema = join_metadata.schema;
+
+        // 添加到schemas列表
+        all_schemas.push_back(join_schema);
+        all_aliases.push_back(join_table_alias.empty() ? join_table_name : join_table_alias);
+
+        // 编译JOIN条件
+        auto condition = compile_expression_multi_table(
+            join_ast->get_condition(), all_schemas, all_aliases);
+        if (!condition) return nullptr;
+
+        // 创建JoinInfo
+        JoinInfo join_info(
+            join_table_name,
+            join_table_alias,
+            convert_join_type(join_ast->get_join_type()),
+            std::move(condition)
+        );
+
+        // 填充列信息
+        join_info.column_names = join_schema.column_names;
+        join_info.column_types = join_schema.column_types;
+
+        join_infos.push_back(std::move(join_info));
+    }
+
+    // 解析SELECT列（支持多表）
+    std::vector<std::string> select_columns;
+    std::vector<size_t> select_column_indices;
+
+    for (const auto& expr_ast : ast->get_select_list()) {
+        if (expr_ast->get_type() == ASTType::COLUMN_REF) {
+            ColumnRefAST* col_ref = static_cast<ColumnRefAST*>(expr_ast.get());
+            if (col_ref->get_column_name() == "*") {
+                // SELECT * - 选择所有表的所有列
+                for (const auto& schema : all_schemas) {
+                    for (const auto& col_name : schema.column_names) {
+                        select_columns.push_back(col_name);
+                        // 列索引需要在执行时根据表的顺序计算
+                        select_column_indices.push_back(0); // Placeholder
+                    }
+                }
+                break;
+            } else {
+                // 具体列 - 需要在多表中解析
+                auto col_expr = compile_column_ref_multi_table(col_ref, all_schemas, all_aliases);
+                if (!col_expr) return nullptr;
+
+                select_columns.push_back(col_expr->get_column_name());
+                select_column_indices.push_back(col_expr->get_column_index());
+            }
+        }
+    }
+
+    // 编译WHERE子句（支持多表）
+    std::unique_ptr<Expression> where_clause;
+    if (ast->get_where_clause()) {
+        where_clause = compile_expression_multi_table(
+            ast->get_where_clause(), all_schemas, all_aliases);
+        if (!where_clause) return nullptr;
+    }
+
+    return make_unique<SelectStatement>(
+        from_table_name,
+        from_table_alias,
+        std::move(join_infos),
+        std::move(select_columns),
+        std::move(select_column_indices),
+        std::move(where_clause)
+    );
+}
+
+// ============= 多表表达式编译 =============
+std::unique_ptr<Expression> Compiler::compile_expression_multi_table(
+    ExprAST* ast,
+    const std::vector<TableSchema>& schemas,
+    const std::vector<std::string>& aliases) {
+
+    if (!ast) return nullptr;
+
+    switch (ast->get_type()) {
+        case ASTType::LITERAL:
+            return compile_literal(static_cast<LiteralAST*>(ast));
+        case ASTType::COLUMN_REF:
+            return compile_column_ref_multi_table(
+                static_cast<ColumnRefAST*>(ast), schemas, aliases);
+        case ASTType::BINARY_OP:
+            return compile_binary_op_multi_table(
+                static_cast<BinaryOpAST*>(ast), schemas, aliases);
+        case ASTType::FUNCTION_CALL:
+            // 函数调用暂不支持多表
+            last_error_ = Status::InvalidArgument("Function calls in JOIN conditions are not yet supported");
+            return nullptr;
+        default:
+            return nullptr;
+    }
+}
+
+std::unique_ptr<ColumnRefExpression> Compiler::compile_column_ref_multi_table(
+    ColumnRefAST* ast,
+    const std::vector<TableSchema>& schemas,
+    const std::vector<std::string>& aliases) {
+
+    std::string table_qualifier = ast->get_table_name();
+    std::string column_name = ast->get_column_name();
+
+    // 如果列名有表限定符（如 t1.id）
+    if (!table_qualifier.empty()) {
+        // 查找对应的表
+        std::string table_qualifier_upper = to_upper(table_qualifier);
+        for (size_t i = 0; i < schemas.size(); ++i) {
+            std::string alias_upper = to_upper(aliases[i]);
+            std::string table_name_upper = to_upper(schemas[i].table_name);
+
+            if (alias_upper == table_qualifier_upper || table_name_upper == table_qualifier_upper) {
+                // 找到了表，查找列
+                size_t col_index;
+                Status status = find_column_index(schemas[i], column_name, col_index);
+                if (!status.ok()) {
+                    last_error_ = status;
+                    return nullptr;
+                }
+                return make_unique<ColumnRefExpression>(
+                    schemas[i].table_name, column_name, col_index);
+            }
+        }
+        // 表限定符不存在
+        last_error_ = Status::NotFound("Table or alias '" + table_qualifier + "' not found");
+        return nullptr;
+    }
+
+    // 如果列名没有表限定符，需要在所有表中查找
+    // 检查是否有歧义（同名列出现在多个表中）
+    int found_count = 0;
+    size_t found_table_idx = 0;
+    size_t found_col_idx = 0;
+
+    for (size_t i = 0; i < schemas.size(); ++i) {
+        size_t col_idx;
+        if (find_column_index(schemas[i], column_name, col_idx).ok()) {
+            found_count++;
+            found_table_idx = i;
+            found_col_idx = col_idx;
+        }
+    }
+
+    if (found_count == 0) {
+        last_error_ = Status::NotFound("Column '" + column_name + "' not found in any table");
+        return nullptr;
+    }
+
+    if (found_count > 1) {
+        last_error_ = Status::InvalidArgument(
+            "Column '" + column_name + "' is ambiguous (found in multiple tables)");
+        return nullptr;
+    }
+
+    // 找到唯一的列
+    return make_unique<ColumnRefExpression>(
+        schemas[found_table_idx].table_name,
+        column_name,
+        found_col_idx);
+}
+
+std::unique_ptr<BinaryExpression> Compiler::compile_binary_op_multi_table(
+    BinaryOpAST* ast,
+    const std::vector<TableSchema>& schemas,
+    const std::vector<std::string>& aliases) {
+
+    auto left = compile_expression_multi_table(ast->get_left(), schemas, aliases);
+    if (!left) return nullptr;
+
+    auto right = compile_expression_multi_table(ast->get_right(), schemas, aliases);
+    if (!right) return nullptr;
+
+    BinaryOperatorType op = convert_binary_op(ast->get_op());
+    return make_unique<BinaryExpression>(op, std::move(left), std::move(right));
 }
 
 } // namespace minidb

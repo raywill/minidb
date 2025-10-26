@@ -183,11 +183,26 @@ std::unique_ptr<SelectAST> SQLParser::parse_select() {
         if (!from_table) return nullptr;
     }
 
+    // Parse JOIN clauses
+    std::vector<std::unique_ptr<JoinClauseAST>> join_clauses;
+    while (match(TokenType::JOIN) || match(TokenType::INNER) ||
+           match(TokenType::LEFT) || match(TokenType::RIGHT) || match(TokenType::FULL)) {
+        auto join_clause = parse_join_clause();
+        if (!join_clause) return nullptr;
+        join_clauses.push_back(std::move(join_clause));
+    }
+
     std::unique_ptr<ExprAST> where_clause;
     if (match(TokenType::WHERE)) {
         advance();
         where_clause = parse_expression();
         if (!where_clause) return nullptr;
+    }
+
+    // If there are JOIN clauses, use the constructor that accepts them
+    if (!join_clauses.empty()) {
+        return make_unique<SelectAST>(std::move(select_list), std::move(from_table),
+                                      std::move(join_clauses), std::move(where_clause));
     }
 
     return make_unique<SelectAST>(std::move(select_list), std::move(from_table), std::move(where_clause));
@@ -333,9 +348,23 @@ std::unique_ptr<ExprAST> SQLParser::parse_primary_expression() {
             return make_unique<LiteralAST>(DataType::BOOL, value);
         }
         case TokenType::IDENTIFIER: {
-            std::string name = current_token_.value;
+            std::string first_name = current_token_.value;
             advance();
-            return make_unique<ColumnRefAST>(name);
+
+            // Check for table.column reference
+            if (match(TokenType::DOT)) {
+                advance();
+                if (!match(TokenType::IDENTIFIER)) {
+                    set_error("Expected column name after '.'");
+                    return nullptr;
+                }
+                std::string column_name = current_token_.value;
+                advance();
+                return make_unique<ColumnRefAST>(first_name, column_name);
+            }
+
+            // Simple column reference
+            return make_unique<ColumnRefAST>(first_name);
         }
         case TokenType::SIN:
         case TokenType::COS:
@@ -393,7 +422,81 @@ std::unique_ptr<TableRefAST> SQLParser::parse_table_reference() {
     std::string table_name = current_token_.value;
     advance();
 
-    return make_unique<TableRefAST>(table_name);
+    // Parse optional table alias
+    std::string alias;
+    if (match(TokenType::AS)) {
+        advance();
+        if (!match(TokenType::IDENTIFIER)) {
+            set_error("Expected alias name after AS");
+            return nullptr;
+        }
+        alias = current_token_.value;
+        advance();
+    } else if (match(TokenType::IDENTIFIER)) {
+        // Also support implicit alias without AS keyword (e.g., "FROM users u")
+        alias = current_token_.value;
+        advance();
+    }
+
+    return make_unique<TableRefAST>(table_name, alias);
+}
+
+JoinType SQLParser::parse_join_type() {
+    // Default to INNER JOIN
+    JoinType join_type = JoinType::INNER;
+
+    if (match(TokenType::INNER)) {
+        advance();
+        join_type = JoinType::INNER;
+    } else if (match(TokenType::LEFT)) {
+        advance();
+        if (match(TokenType::OUTER)) {
+            advance();
+        }
+        join_type = JoinType::LEFT_OUTER;
+    } else if (match(TokenType::RIGHT)) {
+        advance();
+        if (match(TokenType::OUTER)) {
+            advance();
+        }
+        join_type = JoinType::RIGHT_OUTER;
+    } else if (match(TokenType::FULL)) {
+        advance();
+        if (match(TokenType::OUTER)) {
+            advance();
+        }
+        join_type = JoinType::FULL_OUTER;
+    }
+
+    return join_type;
+}
+
+std::unique_ptr<JoinClauseAST> SQLParser::parse_join_clause() {
+    // Parse JOIN type (INNER, LEFT, RIGHT, FULL)
+    JoinType join_type = parse_join_type();
+
+    // Consume JOIN keyword
+    if (!consume(TokenType::JOIN, "Expected JOIN keyword")) {
+        return nullptr;
+    }
+
+    // Parse right table
+    auto right_table = parse_table_reference();
+    if (!right_table) {
+        return nullptr;
+    }
+
+    // Parse ON condition
+    if (!consume(TokenType::ON, "Expected ON keyword after JOIN table")) {
+        return nullptr;
+    }
+
+    auto condition = parse_expression();
+    if (!condition) {
+        return nullptr;
+    }
+
+    return make_unique<JoinClauseAST>(join_type, std::move(right_table), std::move(condition));
 }
 
 std::vector<std::unique_ptr<ExprAST>> SQLParser::parse_expression_list() {
