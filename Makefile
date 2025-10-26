@@ -247,3 +247,6 @@ test_e2e_basic: $(OBJECTS) tests/integration/test_e2e_basic.o
 test_join_e2e: $(OBJECTS) tests/integration/test_join_e2e.o
 	@mkdir -p tests/bin
 	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread
+test_arithmetic_join: $(OBJECTS) tests/integration/test_arithmetic_join.o
+	@mkdir -p tests/bin
+	$(CXX) $(CXXFLAGS) -o tests/bin/$@ $^ -lpthread

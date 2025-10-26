@@ -2,6 +2,7 @@
 #include "log/logger.h"
 #include "common/utils.h"
 #include <cmath>
+#include <algorithm>
 
 namespace minidb {
 
@@ -207,11 +208,18 @@ Status ExpressionEvaluator::evaluate_literal(LiteralExpression* expr, std::strin
 Status ExpressionEvaluator::evaluate_column_ref(ColumnRefExpression* expr, const DataChunk& chunk, size_t row_index, std::string& result) {
     int col_index = find_column_index(chunk, expr->get_column_name());
     if (col_index < 0) {
-        return Status::NotFound("Column not found: " + expr->get_column_name());
+        // Debug: print available columns
+        std::string avail_cols = "";
+        for (size_t i = 0; i < chunk.columns.size(); ++i) {
+            avail_cols += chunk.columns[i].name;
+            if (i < chunk.columns.size() - 1) avail_cols += ", ";
+        }
+        return Status::NotFound("Column not found: '" + expr->get_column_name() +
+                               "'. Available: [" + avail_cols + "]");
     }
-    
+
     const ColumnVector& column = chunk.columns[col_index];
-    
+
     switch (column.type) {
         case DataType::INT:
             result = std::to_string(column.get_int(row_index));
@@ -226,28 +234,45 @@ Status ExpressionEvaluator::evaluate_column_ref(ColumnRefExpression* expr, const
             result = std::to_string(column.get_decimal(row_index));
             break;
     }
-    
+
     return Status::OK();
 }
 
 Status ExpressionEvaluator::evaluate_binary_expr(BinaryExpression* expr, const DataChunk& chunk, size_t row_index, std::string& result) {
     std::string left_value, right_value;
-    
+
     Status status = evaluate_expression(expr->get_left(), chunk, row_index, left_value);
     if (!status.ok()) {
         return status;
     }
-    
+
     status = evaluate_expression(expr->get_right(), chunk, row_index, right_value);
     if (!status.ok()) {
         return status;
     }
-    
+
     BinaryOperatorType op = expr->get_operator();
-    
+
     // 比较操作符
     if (op >= BinaryOperatorType::EQUAL && op <= BinaryOperatorType::GREATER_EQUAL) {
-        bool comparison_result = compare_values(left_value, right_value, op, DataType::STRING);
+        // 尝试数值比较（如果两边都是数字）
+        bool is_numeric = true;
+        try {
+            std::stod(left_value);
+            std::stod(right_value);
+        } catch (...) {
+            is_numeric = false;
+        }
+
+        bool comparison_result;
+        if (is_numeric) {
+            // 数值比较
+            comparison_result = compare_values(left_value, right_value, op, DataType::INT);
+        } else {
+            // 字符串比较
+            comparison_result = compare_values(left_value, right_value, op, DataType::STRING);
+        }
+
         result = comparison_result ? "true" : "false";
         return Status::OK();
     }
@@ -342,8 +367,19 @@ Status ExpressionEvaluator::evaluate_function_expr(FunctionExpression* expr, con
 }
 
 int ExpressionEvaluator::find_column_index(const DataChunk& chunk, const std::string& column_name) {
+    // Helper function to convert string to uppercase
+    auto to_upper = [](const std::string& str) {
+        std::string result = str;
+        std::transform(result.begin(), result.end(), result.begin(),
+                       [](unsigned char c) { return std::toupper(c); });
+        return result;
+    };
+
+    std::string column_name_upper = to_upper(column_name);
+
     for (size_t i = 0; i < chunk.columns.size(); ++i) {
-        if (chunk.columns[i].name == column_name) {
+        std::string chunk_col_upper = to_upper(chunk.columns[i].name);
+        if (chunk_col_upper == column_name_upper) {
             return static_cast<int>(i);
         }
     }
@@ -353,9 +389,17 @@ int ExpressionEvaluator::find_column_index(const DataChunk& chunk, const std::st
 bool ExpressionEvaluator::compare_values(const std::string& left, const std::string& right, BinaryOperatorType op, DataType type) {
     switch (op) {
         case BinaryOperatorType::EQUAL:
-            return left == right;
+            if (type == DataType::STRING) {
+                return left == right;
+            } else {
+                return std::stod(left) == std::stod(right);
+            }
         case BinaryOperatorType::NOT_EQUAL:
-            return left != right;
+            if (type == DataType::STRING) {
+                return left != right;
+            } else {
+                return std::stod(left) != std::stod(right);
+            }
         case BinaryOperatorType::LESS_THAN:
             if (type == DataType::STRING) {
                 return left < right;

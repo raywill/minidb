@@ -267,7 +267,15 @@ bool NestedLoopJoinOperator::evaluate_join_condition(
     std::vector<bool> results;
     Status status = evaluator.evaluate(merged_chunk, results);
 
-    if (!status.ok() || results.empty()) {
+    if (!status.ok()) {
+        LOG_ERROR("NestedLoopJoinOperator", "EvaluateJoinCondition",
+                 "JOIN condition evaluation failed: " + status.message());
+        return false;
+    }
+
+    if (results.empty()) {
+        LOG_ERROR("NestedLoopJoinOperator", "EvaluateJoinCondition",
+                 "JOIN condition returned empty results");
         return false;
     }
 
